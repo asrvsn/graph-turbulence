@@ -2,4 +2,4 @@
 `pip install -r requirements.txt`
 
 ## Experiments
-* Heat eq.: `python -m heat_eq`
+* Heat equation: `python -m heat_eq.*` where `*` is one of the boundary conditions, `free`, `dirichlet`, etc.
