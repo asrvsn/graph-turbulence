@@ -13,7 +13,7 @@ from heat_eq.lib import *
 set_seed(1001)
 
 """ Regular grid example """
-n = 7
+n = 10
 G = nx.grid_2d_graph(n,n)
 
 # Boundary
@@ -30,6 +30,6 @@ u = exact_solution(G, u0, dirichlet_bc=bc)
 
 # Plot snapshots
 # plot_snapshots(G, u, 1.0, 5)
-plot_live(G, u, 1.0)
+plot_live(G, u, 2.0, dt=0.01, speed=0.5)
 
 plt.show()

@@ -24,7 +24,8 @@ u = exact_solution(G, u0)
 
 # Plot snapshots
 vis_G = nx.grid_2d_graph(n, n) # Avoid drawing a torus
-plot_snapshots(vis_G, u, 1.0, 5, absolute_colors=False)
+# plot_snapshots(vis_G, u, 1.0, 5, absolute_colors=False)
+plot_live(vis_G, u, 2.0, dt=0.01)
 
 
 plt.show()

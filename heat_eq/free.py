@@ -23,7 +23,7 @@ u0[np.random.randint(0,n**2)] = 1.0
 u = exact_solution(G, u0)
 
 # Plot snapshots
-plot_snapshots(G, u, 1.0, 5, absolute_colors=False)
-
+# plot_snapshots(G, u, 1.0, 5, absolute_colors=False)
+plot_live(G, u, 2.0, dt=0.01)
 
 plt.show()

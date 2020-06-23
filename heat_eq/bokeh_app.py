@@ -7,12 +7,12 @@ from threading import Thread
 from tornado import gen
 import networkx as nx
 from networkx.readwrite.json_graph import node_link_graph
+from matplotlib.colors import rgb2hex
 
-from bokeh.plotting import figure, output_file, show, curdoc
-from bokeh.models import ColumnDataSource, Slider, Select, Button
+from bokeh.plotting import figure, output_file, show, curdoc, from_networkx
+from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
 from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models.widgets import Div
-from bokeh.plotting import from_networkx
 
 from utils.zmq import pubsub_rx
 from heat_eq.lib import heat_cmap
@@ -24,8 +24,6 @@ doc = curdoc()
 Plot configuration
 '''
 tools = "ypan,ywheel_zoom,ywheel_pan,ybox_zoom,reset"
-height = 1000
-width = 1000
 config = {
 	'vmax': 1.0
 }
@@ -34,7 +32,9 @@ config = {
 '''
 Layout UI
 '''
-plot = figure(title='Heat Equation', plot_height=height, plot_width=width, tools=tools)
+plot = figure(title='Heat Equation', x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None)
+plot.axis.visible = None
+# plot.sizing_mode = 'stretch_both'
 t1 = Div(text='Time:', style={'font-size':'150%'})
 t2 = Div(text='N/A', style={'font-size':'150%'})
 root = column(
@@ -53,22 +53,25 @@ Process messages
 
 @gen.coroutine
 def update(msg):
+	# print(msg)
 	if msg['tag'] == 'init':
-		G = node_link_graph(ujson.loads(msg['graph_data']))
-		layout_func = lambda g: nx.spring_layout(g, iterations=1000)
-		renderer = from_networkx(G, layout_func, scale=2, center=(0,0))
-		renderer.node_renderer.glyph = Oval(size=1, fill_color='fill_color')
+		G = node_link_graph(msg['graph'])
+		G = nx.convert_node_labels_to_integers(G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		n = len(G)
+		renderer = from_networkx(G, nx.spring_layout, scale=0.9, center=(0,0), iterations=1000)
+		print('got here')
+		renderer.node_renderer.glyph = Oval(height=0.1, width=0.1, fill_color='color')
 		renderer.node_renderer.data_source.data = dict(
-			index=list(range(len(G))),
-			fill_color='#CCCCCC'
+			index=list(range(n)),
+			color=['#000000']*n,
 		)
 		plot.renderers.append(renderer)
 		if 'vmax' in msg:
 			config['vmax'] = msg['vmax']
 	elif msg['tag'] == 'data':
-		t2.text = str(msg['t'])
-		print(msg['data'])
-		plot.renderers[0].node_renderer.data_source.data['fill_color'] = [heat_cmap(v / config['vmax']) for v in msg['data']]
+		t2.text = str(round(msg['t'], 2))
+		colors = [rgb2hex(heat_cmap(v / config['vmax'])) for v in msg['data']]
+		plot.renderers[0].node_renderer.data_source.data['color'] = colors
  
 def stream_data():
 	ctx, rx = pubsub_rx()
