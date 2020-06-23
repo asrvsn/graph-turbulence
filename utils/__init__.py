@@ -9,3 +9,4 @@ def set_seed(seed=None):
 		torch.manual_seed(random.randint(1,1e6))
 	else:
 		torch.manual_seed(seed)
+

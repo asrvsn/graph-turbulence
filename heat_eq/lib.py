@@ -1,4 +1,5 @@
 import networkx as nx
+from networkx.readwrite.json_graph import node_link_data
 import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import expm
@@ -6,8 +7,13 @@ from typing import Callable
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pdb
+import time
+from pathlib import Path
 
-from utils import set_seed
+from utils.bokeh import serve_and_open
+from utils.zmq import pubsub_tx
+
+heat_cmap = sns.cubehelix_palette(reverse=True, as_cmap=True)
 
 def exact_solution(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}):
 	''' Returns exact solution for heat eq. on a graph as Callable
@@ -43,7 +49,6 @@ def plot_snapshots(G: nx.Graph, u: Callable, T: float, n: int, absolute_colors=T
 		n: # snapshots
 		absolute_colors: whether to set heatmap extents globally (default: True) or based on individual snapshots
 	'''
-	cmap = sns.cubehelix_palette(reverse=True, as_cmap=True)
 	fig, axs = plt.subplots(1, n)
 	pos = nx.spring_layout(G, iterations=1000)
 	for i in range(n):
@@ -52,9 +57,9 @@ def plot_snapshots(G: nx.Graph, u: Callable, T: float, n: int, absolute_colors=T
 		vals = u(t)
 		if absolute_colors:
 			vmax = max(u(0)) # Assume no other driving
-			nx.draw(G, pos=pos, cmap=cmap, node_color=vals, ax=ax, vmin=0., vmax=vmax)
+			nx.draw(G, pos=pos, cmap=heat_cmap, node_color=vals, ax=ax, vmin=0., vmax=vmax)
 		else:
-			nx.draw(G, pos=pos, cmap=cmap, node_color=vals, ax=ax)
+			nx.draw(G, pos=pos, cmap=heat_cmap, node_color=vals, ax=ax)
 		ax.set_title(f'T={t}')
 
 def plot_rasterized(G: nx.Graph, u: Callable, T: float):
@@ -67,6 +72,32 @@ def plot_rasterized(G: nx.Graph, u: Callable, T: float):
 	tspace = np.linspace(0, T, 100)
 	sol = np.array(list(map(u, tspace))).squeeze()
 	plt.figure(figsize=(20,40))
-	cmap = sns.cubehelix_palette(reverse=True, as_cmap=True)
-	sns.heatmap(sol.T, cmap=cmap, vmin=0., vmax=1.)
+	sns.heatmap(sol.T, cmap=heat_cmap)
 	plt.title(f'Heat equation for T={T} seconds')
+
+
+def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: int=0.2):
+	'''Plot live simulation with Bokeh.
+	Args:
+		G: graph
+		u: solution
+		T: time extent
+		dt: timedelta for frames
+		speed: framerate (1x is realtime)
+	'''
+	path = str(Path(__file__).parent / 'bokeh_app.py')
+	proc = serve_and_open(path)
+	ctx, tx = pubsub_tx()
+
+	try:
+		tx({'tag': 'init', 'graph': node_link_data(G)})
+
+		t = 0.
+		while t < T:
+			vals = u(t).tolist()
+			tx({'tag': 'data', 't': t, 'data': vals})
+			t += dt
+			time.sleep(dt / speed)
+	finally:
+		ctx.destroy()
+		proc.terminate()

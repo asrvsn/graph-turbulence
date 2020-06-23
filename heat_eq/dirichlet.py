@@ -29,7 +29,7 @@ bc = dict(zip(dS, repeat(1.0)))
 u = exact_solution(G, u0, dirichlet_bc=bc)
 
 # Plot snapshots
-plot_snapshots(G, u, 1.0, 5)
-
+# plot_snapshots(G, u, 1.0, 5)
+plot_live(G, u, 1.0)
 
 plt.show()
