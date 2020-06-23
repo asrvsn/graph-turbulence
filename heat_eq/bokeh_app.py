@@ -59,7 +59,6 @@ def update(msg):
 		G = nx.convert_node_labels_to_integers(G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
 		n = len(G)
 		renderer = from_networkx(G, nx.spring_layout, scale=0.9, center=(0,0), iterations=1000)
-		print('got here')
 		renderer.node_renderer.glyph = Oval(height=0.1, width=0.1, fill_color='color')
 		renderer.node_renderer.data_source.data = dict(
 			index=list(range(n)),

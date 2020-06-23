@@ -4,6 +4,9 @@ from bokeh.server.server import Server
 from multiprocessing import Process
 import webbrowser
 
+bokeh_host = 'localhost'
+bokeh_port = 8080
+
 def start_server(filepath: str, host: str, port: int):
 	files = [filepath]
 	argvs = {}
@@ -29,7 +32,7 @@ def start_server(filepath: str, host: str, port: int):
 	srv = Server(apps,**kwags)
 	io_loop.start()
 
-def serve_and_open(filepath: str, host: str='localhost', port: int=8080):
+def serve_and_open(filepath: str, host: str=bokeh_host, port: int=bokeh_port):
 	proc = Process(target=start_server, args=(filepath, host, port))
 	proc.start()
 	webbrowser.open_new_tab('http://{}:{}'.format(host, port))

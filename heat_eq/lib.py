@@ -76,7 +76,7 @@ def plot_rasterized(G: nx.Graph, u: Callable, T: float):
 	plt.title(f'Heat equation for T={T} seconds')
 
 
-def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: int=0.2):
+def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: float=0.2):
 	'''Plot live simulation with Bokeh.
 	Args:
 		G: graph
@@ -90,7 +90,8 @@ def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: int=0.2)
 	ctx, tx = pubsub_tx()
 
 	try:
-		time.sleep(3) # Wait for server to initialize
+		print('Waiting for server to initialize...')
+		time.sleep(2) 
 		tx({'tag': 'init', 'graph': node_link_data(G)})
 
 		t = 0.
@@ -99,6 +100,7 @@ def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: int=0.2)
 			tx({'tag': 'data', 't': t, 'data': vals})
 			t += dt
 			time.sleep(dt / speed)
+		print('Finished rendering.')
 		while True: time.sleep(1) # Let bokeh continue to handle interactivity while we wait
 	finally:
 		ctx.destroy()
