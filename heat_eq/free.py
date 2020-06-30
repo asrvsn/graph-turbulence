@@ -20,7 +20,7 @@ u0 = np.zeros(n*n)
 u0[np.random.randint(0,n**2)] = 1.0
 
 # Solve
-u = exact_solution(G, u0)
+u = solve_exact(G, u0)
 
 # Plot snapshots
 # plot_snapshots(G, u, 1.0, 5, absolute_colors=False)

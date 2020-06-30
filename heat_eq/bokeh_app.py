@@ -23,6 +23,7 @@ doc = curdoc()
 '''
 Plot configuration
 '''
+
 tools = "ypan,ywheel_zoom,ywheel_pan,ybox_zoom,reset"
 config = {
 	'vmax': 1.0
@@ -32,6 +33,7 @@ config = {
 '''
 Layout UI
 '''
+
 plot = figure(title='Heat Equation', x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None)
 plot.axis.visible = None
 # plot.sizing_mode = 'stretch_both'
@@ -71,7 +73,7 @@ def update(msg):
 		t2.text = str(round(msg['t'], 2))
 		colors = [rgb2hex(heat_cmap(v / config['vmax'])) for v in msg['data']]
 		plot.renderers[0].node_renderer.data_source.data['color'] = colors
- 
+
 def stream_data():
 	ctx, rx = pubsub_rx()
 	try:

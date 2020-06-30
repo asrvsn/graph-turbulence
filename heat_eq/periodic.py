@@ -20,7 +20,7 @@ u0 = np.zeros(n*n)
 u0[np.random.randint(0,n**2)] = 1.0
 
 # Solve
-u = exact_solution(G, u0)
+u = solve_exact(G, u0)
 
 # Plot snapshots
 vis_G = nx.grid_2d_graph(n, n) # Avoid drawing a torus

@@ -10,3 +10,8 @@ def set_seed(seed=None):
 	else:
 		torch.manual_seed(seed)
 
+def map_nd_to_1d(coord: tuple):
+	pass
+
+def map_1d_to_nd(i: int):
+	pass

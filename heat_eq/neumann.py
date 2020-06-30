@@ -26,7 +26,7 @@ u0 = np.zeros(n*n)
 bc = dict(zip(dS, repeat(0.1)))
 
 # Solve
-u = exact_solution(G, u0, neumann_bc=bc)
+u = solve_exact(G, u0, neumann_bc=bc)
 
 # Plot snapshots
 plot_snapshots(G, u, 1.0, 5)
