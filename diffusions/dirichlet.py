@@ -8,7 +8,7 @@ import seaborn as sns
 from itertools import repeat
 
 from utils import set_seed
-from heat_eq.lib import *
+from diffusions.lib import *
 
 set_seed(1001)
 
@@ -25,11 +25,22 @@ u0 = np.zeros(n*n)
 # Heated boundary
 bc = dict(zip(dS, repeat(1.0)))
 
-# Solve
-u = solve_exact(G, u0, dirichlet_bc=bc)
+dt = 5e-3
+T = 3.0
+dx = 1.0
+alpha = 1.0 # dif. constant
 
-# Plot snapshots
-# plot_snapshots(G, u, 1.0, 5)
-plot_live(G, u, 2.0, dt=0.01, speed=0.5)
+# Exact solution
+u_ex = solve_exact(G, u0, dirichlet_bc=bc, alpha=alpha) 
+# Time-discrete solution
+u_num = solve_numeric(G, u0, dirichlet_bc=bc, dt=dt, T_max=T, alpha=alpha)
+# Space-discrete solution
+u_lat = solve_lattice((dx, dx), (n, n), u0, dirichlet_bc=bc, dt=dt, T_max=T, alpha=alpha)
+
+sols = {'exact': u_ex, f'time-stepped (dt={dt})': u_num, f'method of lines (dt={dt}, dx={dx})': u_lat}
+
+# Plot 
+# plot_live(G, sols, T, dt=dt, speed=1.0, title=f'Heat eq. with alpha={alpha}')
+plot_rmse(sols, dt, T)
 
 plt.show()

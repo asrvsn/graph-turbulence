@@ -8,7 +8,7 @@ import seaborn as sns
 from itertools import repeat
 
 from utils import set_seed
-from heat_eq.lib import *
+from diffusions.lib import *
 
 set_seed(1001)
 

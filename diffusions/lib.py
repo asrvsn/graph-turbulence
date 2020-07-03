@@ -11,7 +11,7 @@ import pdb
 import time
 from pathlib import Path
 
-from utils import map_1d_to_nd, map_nd_to_1d
+from utils import *
 from utils.bokeh import serve_and_open
 from utils.zmq import pubsub_tx
 
@@ -30,7 +30,7 @@ def constrained_laplacian(G: nx.Graph, dirichlet_bc: dict={}, neumann_bc: dict={
 		elif node in neumann_bc.keys():
 			raise Exception('Neumann conditions not implemented yet') # TODO
 
-	return L
+	return -L
 
 
 def match_ic_bc(u0: np.ndarray, keyfunc: Callable, dirichlet_bc: dict={}, neumann_bc: dict={}):
@@ -41,7 +41,7 @@ def match_ic_bc(u0: np.ndarray, keyfunc: Callable, dirichlet_bc: dict={}, neuman
 			u0[i] = dirichlet_bc[k]
 	return u0
 
-def solve_exact(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, alpha=-1):
+def solve_exact(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, alpha=1.):
 	''' Returns exact solution for heat eq. on a graph as Callable
 	Args:
 		G: graph
@@ -57,7 +57,7 @@ def solve_exact(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: 
 	return u
 
 
-def solve_numeric(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, dt: float=1e-3, T_max: float=1.0, alpha=-1):
+def solve_numeric(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, dt: float=1e-3, T_max: float=1.0, alpha=1.):
 	''' Returns numerically integrated solution for heat eq. on a graph as Callable (using scipy, 'LSODA')
 	Args:
 		G: graph
@@ -72,21 +72,23 @@ def solve_numeric(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc
 	L = constrained_laplacian(G, dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
 	f = lambda u, t: alpha*u@L.T
 	u0 = match_ic_bc(u0, lambda i: nodelist[i], dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
-	tspace = np.linspace(0, T, T/dt)
+	tspace = np.linspace(0, T_max, T_max/dt)
 	uspace = odeint(f, u0, tspace)
-	u = lambda t: uspace[int(round(t/dt))]
+	n = len(uspace)
+	u = lambda t: uspace[min(n-1, int(round(t/dt)))]
 	return u
 
 
-def solve_lattice(dx: tuple, nx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, dt: float=1e-3, T_max: float=1.0, alpha=-1):
+def solve_lattice(dx: tuple, mx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, periodic_bc: bool=False, dt: float=1e-3, T_max: float=1.0, alpha=1.):
 	''' Solve heat eq by finite difference discretization of spatial derivatives (method of lines). 
 	Use for comparison with graph solutions. 
 	Args:
 		dx: tuple of differences (dx1, dx2, ... dxn)
-		nx: tuple of # points (mx1, mx2, ... mxn)
+		mx: tuple of # points (mx1, mx2, ... mxn)
 		u0: initial condition
 		dirichlet_bc: dict mapping boundary nodes to dirichlet conditions 
 		neumann_bc: dict mapping boundary nodes to neumann conditions 
+		periodic_bc:
 		dt: time discretization (i.e. when calling u(), this is the resolution)
 		T_max: end time step to solve out to
 
@@ -94,14 +96,14 @@ def solve_lattice(dx: tuple, nx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, n
 		* neumann condition
 		* banded jacobian?
 	'''
-	assert u0.shape[0] == np.prod(nx), 'Incorrect number of initial conditions'
-	assert len(dx) == len(nx), 'Dimensions of steps and extents mismatch'
+	assert u0.shape[0] == np.prod(mx), 'Incorrect number of initial conditions'
+	assert len(dx) == len(mx), 'Dimensions of steps and extents mismatch'
 	assert len(dirichlet_bc.keys() & neumann_bc.keys()) == 0, 'Dirichlet and Neumann conditions cannot overlap'
 	d = len(dx) # Dimension of problem
 	def f(u, t): # Finite difference ODE
 		dudt = np.empty_like(u)
 		for i in range(len(u)):
-			coord = map_1d_to_nd(i) # embedding nd coords in 1d for odeint() API & to match other funcs
+			coord = map_1d_to_nd(mx, i) # embedding nd coords in 1d for odeint() API & to match other funcs
 			# Check boundary conditions
 			if coord in dirichlet_bc.keys():
 				dudt[i] = 0
@@ -111,15 +113,16 @@ def solve_lattice(dx: tuple, nx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, n
 			# Compute discrete Laplacian
 				Lu = 0
 				for c_i in range(d):
-					below = map_nd_to_1d((*coord[:c_i], coord[c_i]-1, *coord[c_i+1:]))
-					above = map_nd_to_1d((*coord[:c_i], coord[c_i]+1, *coord[c_i+1:]))
+					below = map_nd_to_1d(mx, (*coord[:c_i], coord[c_i]-1, *coord[c_i+1:]))
+					above = map_nd_to_1d(mx, (*coord[:c_i], coord[c_i]+1, *coord[c_i+1:]))
 					Lu += (u[below] - 2*u[i] + u[above]) / (dx[c_i] ** 2)
 				dudt[i] = alpha*Lu
 		return dudt
-	u0 = match_ic_bc(u0, map_1d_to_nd, dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
-	tspace = np.linspace(0, T, T/dt)
+	u0 = match_ic_bc(u0, lambda i: map_1d_to_nd(mx, i), dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
+	tspace = np.linspace(0, T_max, T_max/dt)
 	uspace = odeint(f, u0, tspace)
-	u = lambda t: uspace[int(round(t/dt))]
+	n = len(uspace)
+	u = lambda t: uspace[min(n-1, int(round(t/dt)))]
 	return u
 
 
@@ -159,11 +162,11 @@ def plot_rasterized(G: nx.Graph, u: Callable, T: float):
 	plt.title(f'Heat equation for T={T} seconds')
 
 
-def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: float=0.2):
+def plot_live(G: nx.Graph, sols: dict, T: float, dt: float=0.1, speed: float=1.0, title='Heat eq.'):
 	'''Plot live simulation with Bokeh.
 	Args:
 		G: graph
-		u: solution
+		sols: dict of solution callables (key is rendered name)
 		T: time extent
 		dt: timedelta for frames
 		speed: framerate (1x is realtime)
@@ -175,16 +178,30 @@ def plot_live(G: nx.Graph, u: Callable, T: float, dt: float=0.1, speed: float=0.
 	try:
 		print('Waiting for server to initialize...')
 		time.sleep(2) 
-		tx({'tag': 'init', 'graph': node_link_data(G)})
+		plots = list(sols.keys())
+		tx({'tag': 'init', 'title': title, 'graph': node_link_data(G), 'plots': plots})
 
 		t = 0.
 		while t <= T:
-			vals = u(t).tolist()
-			tx({'tag': 'data', 't': t, 'data': vals})
+			data = {k: u(t).tolist() for k, u in sols.items()}
+			tx({'tag': 'data', 't': t, 'data': data})
 			t += dt
 			time.sleep(dt / speed)
 		print('Finished rendering.')
-		while True: time.sleep(1) # Let bokeh continue to handle interactivity while we wait
+		# while True: time.sleep(1) # Let bokeh continue to handle interactivity while we wait
 	finally:
 		ctx.destroy()
 		proc.terminate()
+
+
+def plot_rmse(sols: dict, dt: float, T: float):
+	'''Plot RMSE against exact solution '''
+	fig, axs = plt.subplots(1, len(sols)-1)
+	tspace = np.linspace(0, T, T/dt)
+	i = 0
+	for key in sols.keys():
+		if key != 'exact':
+			err = np.array([rms(sols['exact'](t) - sols[key](t)) for t in tspace])
+			axs[i].plot(tspace, err)
+			axs[i].set_title(key)
+			i += 1
