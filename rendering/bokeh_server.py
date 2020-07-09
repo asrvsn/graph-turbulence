@@ -45,11 +45,14 @@ speed_slider = Slider(start=-2.0, end=2.0, value=-1.0, step=0.1, title='Speed', 
 '''
 Callbacks
 '''
-def update():
-	global renderers, viz_dt
-	for r in renderers:
-		r.step(viz_dt * 1e-3 * speed)
-	t1.text = str(renderers[0].t)
+async def update():
+	global renderers, viz_dt, speed
+	while True:
+		nxt = gen.sleep(int(viz_dt * speed))
+		for r in renderers:
+			r.step(viz_dt * 1e-3 * speed)
+		t1.text = str(renderers[0].t)
+		await nxt
 
 def pp_button_cb():
 	global viz_dt, render_callback
