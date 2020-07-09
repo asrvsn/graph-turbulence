@@ -1,3 +1,5 @@
+''' Interactive plot for rendering time-indexed graph simulations ''' 
+
 import ujson
 import zmq
 import random
@@ -28,18 +30,49 @@ Variables
 plots = {}
 renderers = []
 render_callback = None
-dt = 1e-3
+speed = 0.1 
+viz_dt = 50 # update every ms
 
 '''
 UI
 '''
 
-t0 = Div(text='', style={'font-size':'200%'})
 t1 = Div(text='Time:', style={'font-size':'150%'})
 t2 = Div(text='N/A', style={'font-size':'150%'})
+pp_button = Button(label='► Play', width=60)
+speed_slider = Slider(start=-2.0, end=2.0, value=-1.0, step=0.1, title='Speed', width=300)
+
+'''
+Callbacks
+'''
+def update():
+	global renderers, viz_dt
+	for r in renderers:
+		r.step(viz_dt * 1e-3 * speed)
+	t1.text = str(renderers[0].t)
+
+def pp_button_cb():
+	global viz_dt, render_callback
+	if pp_button.label == '► Play':
+		pp_button.label = '❚❚ Pause'
+		render_callback = doc.add_periodic_callback(update, viz_dt)
+	else:
+		pp_button.label = '► Play'
+		doc.remove_periodic_callback(render_callback)
+pp_button.on_click(pp_button_cb)
+
+def speed_slider_cb(attr, old, new):
+	global speed
+	speed = 10 ** speed_slider.value
+speed_slider.on_change('value', speed_slider_cb)
+
+'''
+Layout
+'''
+
 root = column(
-	row([t0]),
 	row([t1, t2]),
+	row([pp_button, speed_slider]),
 )
 root.sizing_mode = 'stretch_both'
 doc.add_root(root)
@@ -50,20 +83,15 @@ Updates
 '''
 
 @gen.coroutine
-def update():
-	for r in renderers:
-		r.step(dt)
-	t0.text = str(renderers[0].t)
-
-@gen.coroutine
 def react(msg):
+	global renderers, viz_dt
 	# print(msg)
 	if msg['tag'] == 'init':
 		renderers = [GraphRenderer.from_json(r) for r in msg['renderers']]
 		for r in renderers:
 			plots[r.title] = r.init_plot()
 		root.children.append(row(list(plots.values())))
-		render_callback = doc.add_periodic_callback(update, int(dt/1e-3))
+		# render_callback = doc.add_periodic_callback(update, viz_dt) # update every 50 ms
 
 def stream_data():
 	ctx, rx = pubsub_rx()

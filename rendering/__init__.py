@@ -31,7 +31,7 @@ class GraphRenderer:
 		G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
 		n = len(G)
 		tools = "ypan,ywheel_zoom,ywheel_pan,ybox_zoom,reset"
-		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=100)
+		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
 		plot = figure(title=self.title, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None)
 		plot.axis.visible = None
 		renderer = from_networkx(G, lambda _: layout)
@@ -62,18 +62,18 @@ class GraphRenderer:
 		return {
 			'G': node_link_data(self.G),
 			'title': self.title,
-			'vertex_func': pickle.dumps(self.vertex_func),
-			'edge_func': pickle.dumps(self.edge_func),
+			'vertex_func': pickle.dumps(self.vertex_func).decode('latin1'),
+			'edge_func': pickle.dumps(self.edge_func).decode('latin1'),
 			't': self.t,
 		}
 
 	@staticmethod
-	def from_json(self, data: dict):
+	def from_json(data: dict):
 		return GraphRenderer(
 			node_link_graph(data['G']),
 			data['title'],
-			pickle.loads(data['vertex_func']),
-			edge_func=pickle.loads(data['edge_func']),
+			pickle.loads(data['vertex_func'].encode('latin1')),
+			edge_func=pickle.loads(data['edge_func'].encode('latin1')),
 			t=data['t'],
 		)
 
