@@ -34,13 +34,13 @@ alpha = 1.0 # dif. constant
 u_ex = solve_exact(G, u0, dirichlet_bc=bc, alpha=alpha) 
 # Time-discrete solution
 u_num = solve_numeric(G, u0, dirichlet_bc=bc, dt=dt, T_max=T, alpha=alpha)
-# Space-discrete solution
+# Space/time-discrete solution
 u_lat = solve_lattice((dx, dx), (n, n), u0, dirichlet_bc=bc, dt=dt, T_max=T, alpha=alpha)
 
 sols = {'exact': u_ex, f'time-stepped (dt={dt})': u_num, f'method of lines (dt={dt}, dx={dx})': u_lat}
 
 # Plot 
-# plot_live(G, sols, T, dt=dt, speed=1.0, title=f'Heat eq. with alpha={alpha}')
+plot_live(G, sols, T, dt=dt, speed=1.0, title=f'Heat eq. with alpha={alpha}')
 plot_rmse(sols, dt, T)
 
 plt.show()

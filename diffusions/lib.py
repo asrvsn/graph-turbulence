@@ -3,7 +3,7 @@ from networkx.readwrite.json_graph import node_link_data
 import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import expm
-from scipy.integrate import odeint
+from scipy.integrate import solve_ivp
 from typing import Callable
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -57,7 +57,7 @@ def solve_exact(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: 
 	return u
 
 
-def solve_numeric(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, dt: float=1e-3, T_max: float=1.0, alpha=1.):
+def solve_numeric(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, dt: float=1e-3, T_max: float=1.0, alpha=1., method='RK45'):
 	''' Returns numerically integrated solution for heat eq. on a graph as Callable (using scipy, 'LSODA')
 	Args:
 		G: graph
@@ -70,16 +70,16 @@ def solve_numeric(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc
 	assert u0.shape[0] == len(G.nodes), 'Incorrect number of initial conditions'
 	nodelist = list(G.nodes)
 	L = constrained_laplacian(G, dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
-	f = lambda u, t: alpha*u@L.T
+	f = lambda t, u: alpha*u@L.T
 	u0 = match_ic_bc(u0, lambda i: nodelist[i], dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
-	tspace = np.linspace(0, T_max, T_max/dt)
-	uspace = odeint(f, u0, tspace)
-	n = len(uspace)
-	u = lambda t: uspace[min(n-1, int(round(t/dt)))]
+	sol = solve_ivp(f, (0., T_max), u0, max_step=dt, method=method)
+	def u(t):
+		i = np.searchsorted(sol.t, t, side='left')
+		return sol.y[:,i]
 	return u
 
 
-def solve_lattice(dx: tuple, mx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, periodic_bc: bool=False, dt: float=1e-3, T_max: float=1.0, alpha=1.):
+def solve_lattice(dx: tuple, mx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, periodic_bc: bool=False, dt: float=1e-3, T_max: float=1.0, alpha=1., method='RK45'):
 	''' Solve heat eq by finite difference discretization of spatial derivatives (method of lines). 
 	Use for comparison with graph solutions. 
 	Args:
@@ -100,10 +100,10 @@ def solve_lattice(dx: tuple, mx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, n
 	assert len(dx) == len(mx), 'Dimensions of steps and extents mismatch'
 	assert len(dirichlet_bc.keys() & neumann_bc.keys()) == 0, 'Dirichlet and Neumann conditions cannot overlap'
 	d = len(dx) # Dimension of problem
-	def f(u, t): # Finite difference ODE
+	def f(t, u): # Finite difference ODE
 		dudt = np.empty_like(u)
 		for i in range(len(u)):
-			coord = map_1d_to_nd(mx, i) # embedding nd coords in 1d for odeint() API & to match other funcs
+			coord = map_1d_to_nd(mx, i) # embedding nd coords in 1d for solve_ivp() API & to match other funcs
 			# Check boundary conditions
 			if coord in dirichlet_bc.keys():
 				dudt[i] = 0
@@ -119,10 +119,10 @@ def solve_lattice(dx: tuple, mx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, n
 				dudt[i] = alpha*Lu
 		return dudt
 	u0 = match_ic_bc(u0, lambda i: map_1d_to_nd(mx, i), dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)
-	tspace = np.linspace(0, T_max, T_max/dt)
-	uspace = odeint(f, u0, tspace)
-	n = len(uspace)
-	u = lambda t: uspace[min(n-1, int(round(t/dt)))]
+	sol = solve_ivp(f, (0., T_max), u0, max_step=dt, method=method)
+	def u(t):
+		i = np.searchsorted(sol.t, t, side='left')
+		return sol.y[:,i]
 	return u
 
 
