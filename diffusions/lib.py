@@ -1,5 +1,4 @@
 import networkx as nx
-from networkx.readwrite.json_graph import node_link_data
 import numpy as np
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import expm
@@ -8,14 +7,9 @@ from typing import Callable
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pdb
-import time
-from pathlib import Path
 
 from utils import *
-from utils.bokeh import serve_and_open
-from utils.zmq import pubsub_tx
-
-heat_cmap = sns.cubehelix_palette(reverse=True, as_cmap=True)
+from rendering import heat_cmap
 
 def constrained_laplacian(G: nx.Graph, dirichlet_bc: dict={}, neumann_bc: dict={}):
 	''' Returns graph Laplacian which is (a) unconstrained or solves (b) Dirichlet problem or (c) Neumann problem ''' 
@@ -40,6 +34,7 @@ def match_ic_bc(u0: np.ndarray, keyfunc: Callable, dirichlet_bc: dict={}, neuman
 		if k in dirichlet_bc.keys():
 			u0[i] = dirichlet_bc[k]
 	return u0
+
 
 def solve_exact(G: nx.Graph, u0: np.ndarray, dirichlet_bc: dict={}, neumann_bc: dict={}, alpha=1.):
 	''' Returns exact solution for heat eq. on a graph as Callable
@@ -148,6 +143,7 @@ def plot_snapshots(G: nx.Graph, u: Callable, T: float, n: int, absolute_colors=T
 			nx.draw(G, pos=pos, cmap=heat_cmap, node_color=vals, ax=ax)
 		ax.set_title(f'T={t}')
 
+
 def plot_rasterized(G: nx.Graph, u: Callable, T: float):
 	'''
 	Args:
@@ -162,38 +158,6 @@ def plot_rasterized(G: nx.Graph, u: Callable, T: float):
 	plt.title(f'Heat equation for T={T} seconds')
 
 
-def plot_live(G: nx.Graph, sols: dict, T: float, dt: float=0.1, speed: float=1.0, title='Heat eq.'):
-	'''Plot live simulation with Bokeh.
-	Args:
-		G: graph
-		sols: dict of solution callables (key is rendered name)
-		T: time extent
-		dt: timedelta for frames
-		speed: framerate (1x is realtime)
-	'''
-	path = str(Path(__file__).parent / 'bokeh_app.py')
-	proc = serve_and_open(path)
-	ctx, tx = pubsub_tx()
-
-	try:
-		print('Waiting for server to initialize...')
-		time.sleep(2) 
-		plots = list(sols.keys())
-		tx({'tag': 'init', 'title': title, 'graph': node_link_data(G), 'plots': plots})
-
-		t = 0.
-		while t <= T:
-			data = {k: u(t).tolist() for k, u in sols.items()}
-			tx({'tag': 'data', 't': t, 'data': data})
-			t += dt
-			time.sleep(dt / speed)
-		print('Finished rendering.')
-		# while True: time.sleep(1) # Let bokeh continue to handle interactivity while we wait
-	finally:
-		ctx.destroy()
-		proc.terminate()
-
-
 def plot_rmse(sols: dict, dt: float, T: float):
 	'''Plot RMSE against exact solution '''
 	fig, axs = plt.subplots(1, len(sols)-1)
@@ -205,3 +169,6 @@ def plot_rmse(sols: dict, dt: float, T: float):
 			axs[i].plot(tspace, err)
 			axs[i].set_title(key)
 			i += 1
+
+
+
