@@ -40,9 +40,9 @@ u_lat = solve_lattice((dx, dx), (n, n), u0, dirichlet_bc=bc, dt=dt, T_max=T, alp
 
 # Plot 
 renderers = [
-	GraphRenderer(G, 'exact', u_ex),
-	GraphRenderer(G, f'time-stepped (dt={dt})', u_num),
-	GraphRenderer(G, f'method of lines (dt={dt}, dx={dx})', u_lat),
+	GraphDiffEq(G, 'exact', u_ex),
+	GraphDiffEq(G, f'time-stepped (dt={dt})', u_num),
+	GraphDiffEq(G, f'method of lines (dt={dt}, dx={dx})', u_lat),
 ]
 
 render_live(renderers)

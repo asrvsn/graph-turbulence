@@ -1,15 +1,10 @@
 ''' Interactive plot for rendering time-indexed graph simulations ''' 
 
-import ujson
-import zmq
-import random
 import numpy as np
 from functools import partial
 from threading import Thread
 from tornado import gen
-import networkx as nx
-from networkx.readwrite.json_graph import node_link_graph
-from matplotlib.colors import rgb2hex
+import dill as pickle
 
 from bokeh.plotting import figure, output_file, show, curdoc, from_networkx
 from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
@@ -49,7 +44,7 @@ def update():
 	global renderers, viz_dt
 	for r in renderers:
 		r.step(viz_dt * 1e-3 * speed)
-	t1.text = str(renderers[0].t)
+	t2.text = str(round(renderers[0].t, 3))
 
 def pp_button_cb():
 	global viz_dt, render_callback
@@ -87,11 +82,10 @@ def react(msg):
 	global renderers, viz_dt
 	# print(msg)
 	if msg['tag'] == 'init':
-		renderers = [GraphRenderer.from_json(r) for r in msg['renderers']]
+		renderers = [pickle.loads(r.encode('latin1')) for r in msg['renderers']]
 		for r in renderers:
-			plots[r.title] = r.init_plot()
+			plots[r.desc] = r.create_plot()
 		root.children.append(row(list(plots.values())))
-		# render_callback = doc.add_periodic_callback(update, viz_dt) # update every 50 ms
 
 def stream_data():
 	ctx, rx = pubsub_rx()

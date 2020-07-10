@@ -49,3 +49,7 @@ def is_sorted(l: list):
 
 def rms(arr: np.ndarray):
 	return np.sqrt((arr ** 2).mean())
+
+def replace(arr: np.ndarray, replace_at: list, replace_with: np.ndarray):
+	arr[replace_at] = replace_with
+	return arr
