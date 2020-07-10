@@ -26,7 +26,7 @@ class GraphDiffEq:
 			dl_dt: difference equation for edges taking args (time, vertex_values, edge_values)
 			t0: start time
 			desc: diff.eq description (will be displayed if rendered)
-			solver: scipy.integrate.ode solver designation (default: dopri5 aka Runge-Kutta 4/5)
+			solver: scipy.integrate.ode solver designation (default: 'dopri5' aka Runge-Kutta 4/5)
 			**solver_args: additional arguments to be passed to integrator
 		'''
 		# Consistency checks
@@ -114,10 +114,10 @@ class GraphDiffEq:
 		plot.axis.visible = None
 		renderer = from_networkx(G, layout)
 		renderer.node_renderer.data_source.data['color'] = ['#000000']*n_v
-		renderer.node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color='color')
+		renderer.node_renderer.glyph = Oval(height=0.08, width=0.07, fill_color='color')
 		renderer.edge_renderer.data_source.data['alpha'] = [0.5]*n_e
 		renderer.edge_renderer.glyph = MultiLine(line_color='#000000', line_alpha='alpha', line_width=5)
-		# # TODO: render edge direction
+		# # TODO: render edge direction w/ arrows somehow
 		plot.renderers.append(renderer)
 		self.plot = plot
 		return plot
@@ -128,4 +128,4 @@ class GraphDiffEq:
 		alphas = [np.abs(0.8*x)+0.2 for x in self.l]
 		self.plot.renderers[0].node_renderer.data_source.data['color'] = colors
 		self.plot.renderers[0].edge_renderer.data_source.data['alpha'] = alphas
-		# # TODO: render edge direction
+		# # TODO: render edge direction w/ arrows somehow

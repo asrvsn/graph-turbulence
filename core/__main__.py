@@ -26,12 +26,8 @@ offsets = np.random.normal(size=len(l0))
 dl_dt = lambda t, v, l: 4*np.sin(4*t + offsets) # Display some random edge behavior...
 
 # Set up problem
-gde = GraphDiffEq(G, v0, l0, dv_dt, dl_dt, desc='Heat equation with Dirichlet boundary conditions')
+gde = GraphDiffEq(G, v0, l0, dv_dt, dl_dt, desc='Heat equation with Dirichlet boundary conditions and some random edge behavior')
 gde.set_vertex_boundary(dict(zip(dS, repeat(1.0))))
 
-# gde2 = GraphDiffEq.from_json(gde.to_json())
-# gde2.step(0.1)
-
 # Render live
-# s = pickle.dumps(gde)
 render_bokeh([gde])
