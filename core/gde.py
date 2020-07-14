@@ -66,6 +66,7 @@ class GraphDiffEq:
 
 	def set_vertex_boundary(self, dirichlet: dict={}, neumann: dict={}):
 		''' Set boundary conditions on vertices ''' 
+		# TODO: ensure consistency of edges & nodes here..
 		assert len(dirichlet.keys() & neumann.keys()) == 0, 'Dirichlet and Neumann conditions cannot overlap'
 		nodes = list(self.G.nodes)
 		d_vals = list(dirichlet.values())
@@ -81,6 +82,7 @@ class GraphDiffEq:
 
 	def set_edge_boundary(self, dirichlet: dict={}, neumann: dict={}):
 		''' Set boundary conditions on edges ''' 
+		# TODO: ensure consistency of edges & nodes here..
 		assert len(dirichlet.keys() & neumann.keys()) == 0, 'Dirichlet and Neumann conditions cannot overlap'
 		edges = list(self.G.edges)
 		d_vals = list(dirichlet.values())
@@ -93,6 +95,12 @@ class GraphDiffEq:
 		self.edge_bc = (replace_at, replace_with)
 		# Reset the current value per Dirichlet conditions
 		self.l_ode.set_initial_value(replace(self.l, d_idx, d_vals), self.t)
+
+	def set_vertex_limits(self, lower: float=-float('inf'), upper: float=float('inf'), which: list):
+		pass # TODO
+
+	def set_edge_limit(self, lower: float=-float('inf'), upper: float=float('inf'), which: list):
+		pass # TODO
 
 	def step(self, dt: float):
 		''' Solve system forward for dt time ''' 
@@ -109,23 +117,30 @@ class GraphDiffEq:
 		n_v = len(G)
 		n_e = len(G.edges())
 		tools = "ypan,ywheel_zoom,ywheel_pan,ybox_zoom,reset"
+		tooltips = [('value', '@nodes')]
 		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
-		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None)
+		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None, tooltips=tooltips)
 		plot.axis.visible = None
 		renderer = from_networkx(G, layout)
+		renderer.node_renderer.data_source.data['nodes'] = [0.]*n_v
+		# renderer.edge_renderer.data_source.data['edges'] = [0.]*n_e
 		renderer.node_renderer.data_source.data['color'] = ['#000000']*n_v
 		renderer.node_renderer.glyph = Oval(height=0.08, width=0.07, fill_color='color')
 		renderer.edge_renderer.data_source.data['alpha'] = [0.5]*n_e
 		renderer.edge_renderer.glyph = MultiLine(line_color='#000000', line_alpha='alpha', line_width=5)
 		# # TODO: render edge direction w/ arrows somehow
+		# using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
 		plot.renderers.append(renderer)
 		self.plot = plot
 		return plot
 
 	def _render(self):
 		''' Draw glyphs based on current graph values ''' 
-		colors = [rgb2hex(heat_cmap(x)) for x in self.v]
-		alphas = [np.abs(0.8*x)+0.2 for x in self.l]
-		self.plot.renderers[0].node_renderer.data_source.data['color'] = colors
-		self.plot.renderers[0].edge_renderer.data_source.data['alpha'] = alphas
+		self.plot.renderers[0].node_renderer.data_source.data['nodes'] = self.v
+		# self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.l
+		self.plot.renderers[0].node_renderer.data_source.data['color'] = [rgb2hex(heat_cmap(x)) for x in self.v]
+		self.plot.renderers[0].edge_renderer.data_source.data['alpha'] = [np.abs(0.8*x)+0.2 for x in self.l]
 		# # TODO: render edge direction w/ arrows somehow
+
+	def reset(self):
+		pass # TODO
