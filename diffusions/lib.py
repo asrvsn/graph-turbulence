@@ -9,7 +9,6 @@ import seaborn as sns
 import pdb
 
 from utils import *
-from rendering import heat_cmap
 
 def constrained_laplacian(G: nx.Graph, dirichlet_bc: dict={}, neumann_bc: dict={}):
 	''' Returns graph Laplacian which is (a) unconstrained or solves (b) Dirichlet problem or (c) Neumann problem ''' 

@@ -16,7 +16,6 @@ from bokeh.transform import linear_cmap
 import colorcet as cc
 
 from utils import *
-from utils.rendering import heat_cmap
 
 class GraphDiffEq: 
 	def __init__(
@@ -133,6 +132,8 @@ class GraphDiffEq:
 		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
 		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None, tooltips=tooltips, aspect_ratio=1.2)
 		plot.axis.visible = None
+		plot.xgrid.grid_line_color = None
+		plot.ygrid.grid_line_color = None
 		renderer = from_networkx(G, layout)
 		renderer.node_renderer.data_source.data['nodes'] = self.v.tolist()
 		renderer.node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('nodes', self.node_palette, self.node_lo, self.node_hi))

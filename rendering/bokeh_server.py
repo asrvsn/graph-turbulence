@@ -85,7 +85,8 @@ def react(msg):
 		renderers = [pickle.loads(r.encode('latin1')) for r in msg['renderers']]
 		for r in renderers:
 			plots[r.desc] = r.create_plot()
-		root.children.append(row(list(plots.values())))
+		grid = gridplot(children=list(plots.values()), ncols=2, sizing_mode='scale_both', toolbar_location=None)
+		root.children.append(grid)
 
 def stream_data():
 	ctx, rx = pubsub_rx()
