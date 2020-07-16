@@ -6,17 +6,23 @@ from typing import Callable, List
 import scipy
 import dill as pickle # For pickling lambdas
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
-from matplotlib.colors import rgb2hex
-from bokeh.plotting import figure, from_networkx
-from bokeh.models.glyphs import Oval, MultiLine
 import ujson
 import pdb
+from matplotlib.colors import rgb2hex
+from bokeh.plotting import figure, from_networkx
+from bokeh.models import ColorBar, LinearColorMapper, BasicTicker
+from bokeh.models.glyphs import Oval, MultiLine
+from bokeh.transform import linear_cmap
+import colorcet as cc
 
 from utils import *
 from utils.rendering import heat_cmap
 
 class GraphDiffEq: 
-	def __init__(self, G: nx.Graph, v0: np.ndarray, l0: np.ndarray, dv_dt: Callable, dl_dt: Callable, t0: float=0., desc: str=None, solver: str='dopri5', **solver_args):
+	def __init__(
+			self, G: nx.Graph, v0: np.ndarray, l0: np.ndarray, dv_dt: Callable, dl_dt: Callable, 
+			t0: float=0., desc: str=None, node_palette=cc.fire, edge_palette=cc.gray, solver: str='dopri5', **solver_args
+		):
 		''' Initialize a graph-domain differential equation with time-varying values on vertices and edges.
 		Args:
 			G: graph
@@ -26,6 +32,8 @@ class GraphDiffEq:
 			dl_dt: difference equation for edges taking args (time, vertex_values, edge_values)
 			t0: start time
 			desc: diff.eq description (will be displayed if rendered)
+			node_palette: color palette for node values 
+			edge_palette: color palette for edge values
 			solver: scipy.integrate.ode solver designation (default: 'dopri5' aka Runge-Kutta 4/5)
 			**solver_args: additional arguments to be passed to integrator
 		'''
@@ -48,6 +56,10 @@ class GraphDiffEq:
 		# Rendering
 		self.plot = None
 		self.desc = desc
+		self.node_palette = node_palette
+		self.edge_palette = edge_palette
+		self.node_lo, self.node_hi = 0., 1.
+		self.edge_lo, self.edge_hi = 0., 1.
 
 	@property 
 	def t(self):
@@ -96,10 +108,10 @@ class GraphDiffEq:
 		# Reset the current value per Dirichlet conditions
 		self.l_ode.set_initial_value(replace(self.l, d_idx, d_vals), self.t)
 
-	def set_vertex_limits(self, lower: float=-float('inf'), upper: float=float('inf'), which: list):
+	def set_vertex_limits(self, lower: float=-float('inf'), upper: float=float('inf'), which: list=[]):
 		pass # TODO
 
-	def set_edge_limit(self, lower: float=-float('inf'), upper: float=float('inf'), which: list):
+	def set_edge_limits(self, lower: float=-float('inf'), upper: float=float('inf'), which: list=[]):
 		pass # TODO
 
 	def step(self, dt: float):
@@ -116,30 +128,30 @@ class GraphDiffEq:
 		G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
 		n_v = len(G)
 		n_e = len(G.edges())
-		tools = "ypan,ywheel_zoom,ywheel_pan,ybox_zoom,reset"
+		tools = 'reset'
 		tooltips = [('value', '@nodes')]
 		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
-		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None, tooltips=tooltips)
+		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None, tooltips=tooltips, aspect_ratio=1.2)
 		plot.axis.visible = None
 		renderer = from_networkx(G, layout)
-		renderer.node_renderer.data_source.data['nodes'] = [0.]*n_v
-		# renderer.edge_renderer.data_source.data['edges'] = [0.]*n_e
-		renderer.node_renderer.data_source.data['color'] = ['#000000']*n_v
-		renderer.node_renderer.glyph = Oval(height=0.08, width=0.07, fill_color='color')
-		renderer.edge_renderer.data_source.data['alpha'] = [0.5]*n_e
-		renderer.edge_renderer.glyph = MultiLine(line_color='#000000', line_alpha='alpha', line_width=5)
+		renderer.node_renderer.data_source.data['nodes'] = self.v.tolist()
+		renderer.node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('nodes', self.node_palette, self.node_lo, self.node_hi))
+		renderer.edge_renderer.data_source.data['edges'] = self.l.tolist()
+		renderer.edge_renderer.glyph = MultiLine(line_color=linear_cmap('edges', self.edge_palette, self.edge_lo, self.edge_hi), line_width=5)
 		# # TODO: render edge direction w/ arrows somehow
 		# using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
 		plot.renderers.append(renderer)
+		node_cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.node_palette, low=self.node_lo, high=self.node_hi), ticker=BasicTicker(), title='Node')
+		edge_cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.edge_palette, low=self.edge_lo, high=self.edge_hi), ticker=BasicTicker(), title='Edge')
+		plot.add_layout(node_cbar, 'right')
+		plot.add_layout(edge_cbar, 'right')
 		self.plot = plot
 		return plot
 
 	def _render(self):
 		''' Draw glyphs based on current graph values ''' 
 		self.plot.renderers[0].node_renderer.data_source.data['nodes'] = self.v
-		# self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.l
-		self.plot.renderers[0].node_renderer.data_source.data['color'] = [rgb2hex(heat_cmap(x)) for x in self.v]
-		self.plot.renderers[0].edge_renderer.data_source.data['alpha'] = [np.abs(0.8*x)+0.2 for x in self.l]
+		self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.l
 		# # TODO: render edge direction w/ arrows somehow
 
 	def reset(self):

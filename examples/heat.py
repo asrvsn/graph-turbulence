@@ -14,7 +14,7 @@ G = nx.grid_2d_graph(n, n)
 
 def gde1():
 	# Initial conditions
-	v0 = np.zeros(n**2)
+	v0 = np.zeros(len(G.nodes()))
 	l0 = np.zeros(len(G.edges()))
 
 	# Difference equations
@@ -34,7 +34,7 @@ def gde1():
 
 def gde2():
 	# Initial conditions
-	v0 = np.ones(n**2)
+	v0 = np.ones(len(G.nodes()))
 	l0 = np.zeros(len(G.edges()))
 
 	# Difference equations
