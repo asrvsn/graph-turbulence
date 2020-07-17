@@ -2,9 +2,9 @@
 
 import networkx as nx
 import numpy as np
-from typing import Callable, List
-import scipy
+import scipy.integrate
 import dill as pickle # For pickling lambdas
+from typing import Callable, List, Tuple, Union, Any
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import ujson
 import pdb
@@ -14,15 +14,208 @@ from bokeh.models import ColorBar, LinearColorMapper, BasicTicker
 from bokeh.models.glyphs import Oval, MultiLine
 from bokeh.transform import linear_cmap
 import colorcet as cc
+from enum import Enum
+from abc import ABC, abstractmethod
 
 from utils import *
+
+''' Basic types ''' 
+
+class Domain(Enum):
+	Vertex = 0
+	Edge = 1
+	# Can extend...
+	# Face = 2
+
+Vertex = Any
+Edge = Tuple[Vertex, Vertex]
+# Face = Tuple[Vertex, ...]
+GeoObject = Union[Vertex, Edge]
+
+class Observable(ABC):
+	''' A real-valued function defined on a graph 
+	Note: abstract base class, not intended to be instantiated.
+	''' 
+
+	def __init__(self, G: nx.Graph):
+		self.G = G
+		self.init_domain()
+		self.ode = None
+		self.y = np.zeros(len(self.domain))
+		self.t = 0.
+		self.dirichlet_values = dict()
+		self.neumann_values = dict()
+		self.plot = None
+
+	@abstractmethod
+	def init_domain(self):
+		pass
+
+	''' ODE ''' 
+
+	def set_ode(self, f: Callable[float], order: int=1, solver: str='dopri5', **solver_args):
+
+		self.ode = scipy.integrate.ode(lambda t, y: f(t)).set_integrator(solver, **solver_args)
+		self.order = order
+
+	''' Initial & Boundary Conditions ''' 
+
+	def set_initial(self, t0: float=0., y0: Any=0.):
+		self.t = t0
+		if isinstance(y0, Iterable):
+			self.y = np.array(y0)
+		elif isintance(y0, repeat):
+			self.y = np.array(take(len(self), y0))
+		else:
+			self.y = np.full(len(self), y0)
+		if self.ode is not None:
+			self.ode.set_initial_value(self.y, self.t)
+
+	def set_boundary(self, dirichlet_values: Dict[GeoObject, float]={}, neumann_values: Dict[GeoObject, float]={}):
+		intersect = dirichlet_values.keys() & neumann_values.keys()
+		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
+		self.dirichlet_values = dirichlet_values
+		self.neumann_values = neumann_values
+		y = replace(self.y, [self.domain[k] for k in dirichlet_values.keys()], list(dirichlet_values.values()))
+		self.set_initial(t0=self.t, y0=y)
+
+	''' Integration ''' 
+
+	def step(self, dt: float):
+		if self.ode is not None:
+			self.ode.integrate(self.t + dt)
+
+	def measure(self):
+		if self.ode is not None:
+			self.t = self.ode.t
+			self.y = self.ode.y
+		if self.plot is not None:
+			self.render()
+		return self.y
+
+	''' Operators ''' 
+
+	@abstractmethod
+	def partial(self, x1: GeoObject, x2: GeoObject) -> float:
+		pass
+
+	@abstractmethod
+	def grad(self) -> np.ndarray:
+		pass
+
+	@abstractmethod
+	def div(self) -> np.ndarray:
+		pass
+
+	@abstractmethod
+	def laplacian(self) -> np.ndarray: 
+		pass
+
+	''' Builtins ''' 
+
+	def __len__(self):
+		return len(self.domain)
+
+	def __call__(self, x: GeoObject):
+		return self.y[self.domain[x]]
+
+	''' Rendering ''' 
+
+	def create_plot(self):
+		''' Create plot for rendering with Bokeh ''' 
+		G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
+		plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
+		plot.axis.visible = None
+		plot.xgrid.grid_line_color = None
+		plot.ygrid.grid_line_color = None
+		renderer = from_networkx(G, layout)
+		plot.renderers.append(renderer)
+		self.plot = plot
+		return plot
+
+	@abstractmethod
+	def render(self):
+		''' Render current values to the plot ''' 
+		pass
+
+
+class VertexObservable(Observable):
+	def init_domain(self):
+		self.domain = dict(zip(self.G.nodes(), itertools.count(0)))
+
+	def weight(edge: Edge): float:
+		return 1.0 # TODO
+
+	def partial(edge: Edge) -> float:
+		return np.sqrt(self.weight(edge)) * self(edge[1]) - self(edge[0]) 
+
+	def grad(self) -> np.ndarray:
+		return np.array([self.partial(edge) for edge in self.G.edges()])
+
+	def div(self) -> np.ndarray:
+		raise Exception('implement me')
+
+	def laplacian_at(self, x: Vertex) -> float:
+		''' Compute Laplacian that solves Neumann problem using phantom-node method '''
+		ret = sum([self.weight((x, n)) * (self(n) - self(x)) for n in self.G.neighbors(x)])
+		if x in self.neumann_values:
+			ret += self.neumann_values[x]
+		return ret
+
+	def laplacian(self) -> np.ndarray:
+		return np.array([self.laplacian_at(x) for x in self.G.nodes()])
+
+	def create_plot(self):
+		super().create_plot()
+		palette = cc.fire
+		lo, hi = 0., 1.
+		self.plot.renderers[0].node_renderer.data_source.data['nodes'] = self.y
+		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('nodes', palette, lo, hi))
+		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title='Node')
+		self.plot.add_layout(cbar, 'right')
+
+	def render(self):
+		self.plot.renderers[0].node_renderer.data_source.data['nodes'] = self.y
+
+
+class EdgeObservable(Observable):
+	def init_domain(self):
+		self.domain = dict(zip(self.G.edges(), itertools.count(0)))
+
+	def partial(edge: Edge) -> float:
+		raise Exception('implement me')
+
+	def grad(self) -> np.ndarray:
+		raise Exception('implement me')
+
+	def div_at(self, x: Vertex) -> float:
+		return sum([np.sqrt(self.weight(x, n)) * (self(n) - self(x)) for n in self.G.neighbors(x)])
+
+	def div(self) -> np.ndarray:
+		return np.array([self.div_at(x) for x in self.G.nodes()])
+
+	def create_plot(self):
+		super().create_plot()
+		palette = cc.gray
+		lo, hi = 0., 1.
+		self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.y
+		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edges', palette, lo, hi), line_width=5)
+		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title='Edge')
+		self.plot.add_layout(cbar, 'right')
+
+	def render(self):
+		self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.y
+
+
+''' Main class ''' 
 
 class GraphDiffEq: 
 	def __init__(
 			self, G: nx.Graph, v0: np.ndarray, l0: np.ndarray, dv_dt: Callable, dl_dt: Callable, 
 			t0: float=0., desc: str=None, node_palette=cc.fire, edge_palette=cc.gray, solver: str='dopri5', **solver_args
 		):
-		''' Initialize a graph-domain differential equation with time-varying values on vertices and edges.
+		''' General class for running initial+boundary value problems on graphs.
 		Args:
 			G: graph
 			v0: initial values for vertices
@@ -30,7 +223,7 @@ class GraphDiffEq:
 			dv_dt: difference equation for vertices taking args (time, vertex_values, edge_values)
 			dl_dt: difference equation for edges taking args (time, vertex_values, edge_values)
 			t0: start time
-			desc: diff.eq description (will be displayed if rendered)
+			desc: description (will be displayed if rendered)
 			node_palette: color palette for node values 
 			edge_palette: color palette for edge values
 			solver: scipy.integrate.ode solver designation (default: 'dopri5' aka Runge-Kutta 4/5)
@@ -76,7 +269,11 @@ class GraphDiffEq:
 		return self.l_ode.y
 
 	def set_vertex_boundary(self, dirichlet: dict={}, neumann: dict={}):
-		''' Set boundary conditions on vertices ''' 
+		''' Set boundary conditions for vertex-valued function. 
+		Args:
+			dirichlet: map of nodes to f(t), dictating their values at time t
+			neumann: map of nodes to g(t), dictating the value of the gradient at the node at time t
+		''' 
 		# TODO: ensure consistency of edges & nodes here..
 		assert len(dirichlet.keys() & neumann.keys()) == 0, 'Dirichlet and Neumann conditions cannot overlap'
 		nodes = list(self.G.nodes)
@@ -127,10 +324,9 @@ class GraphDiffEq:
 		G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
 		n_v = len(G)
 		n_e = len(G.edges())
-		tools = 'reset'
 		tooltips = [('value', '@nodes')]
 		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
-		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tools=tools, toolbar_location=None, tooltips=tooltips, aspect_ratio=1.2)
+		plot = figure(title=self.desc, x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=tooltips, aspect_ratio=1.2)
 		plot.axis.visible = None
 		plot.xgrid.grid_line_color = None
 		plot.ygrid.grid_line_color = None
@@ -157,3 +353,8 @@ class GraphDiffEq:
 
 	def reset(self):
 		pass # TODO
+
+
+class LatticeDiffEq(GraphDiffEq):
+	''' Differential equations on 2D lattices ''' 
+	pass
