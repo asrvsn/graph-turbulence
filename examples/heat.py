@@ -17,7 +17,7 @@ upper, lower, left, right = [(0,j) for j in range(n)], [(n-1,j) for j in range(n
 def sys1():
 	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
-	temp.set_ode(lambda t: alpha*temp.laplacian())
+	temp.set_ode(lambda t: alpha*laplacian(temp))
 	temp.set_initial(
 		y0=lambda _: 0.0
 	)
@@ -43,4 +43,5 @@ def sys2():
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with mixed boundary conditions')
 	return sys
 
-render_live([sys1(), sys2()])
+if __name__ == '__main__':
+	render_live([sys1(), sys2()])

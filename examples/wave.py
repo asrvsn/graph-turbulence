@@ -18,7 +18,7 @@ upper, lower, left, right = [(0,j) for j in range(n)], [(n-1,j) for j in range(n
 def sys1():
 	c = 1.0
 	ampl = VertexObservable(G, desc='Amplitude')
-	ampl.set_ode(lambda t: (c**2)*ampl.laplacian(), order=2)
+	ampl.set_ode(lambda t: (c**2)*laplacian(ampl), order=2)
 	ampl.set_initial(
 		y0=lambda pos: pos[0]*pos[1]*(n-pos[0])*(n-pos[1]) / (n**3),
 		y0_1=lambda _: 0.0, 
@@ -31,4 +31,5 @@ def sys1():
 	sys = System([ampl], desc=f'Wave equation (c={c}) with fixed boundary conditions')
 	return sys
 
-render_live([sys1()])
+if __name__ == '__main__':
+	render_live([sys1()])

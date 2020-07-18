@@ -38,7 +38,7 @@ class Observable(ABC):
 	Note: abstract base class, not intended to be instantiated.
 	''' 
 
-	def __init__(self, G: nx.Graph, desc: str=''):
+	def __init__(self, G: nx.Graph, desc: str='', weight_key: str=None):
 		self.G = G
 		self.init_domain()
 		self.n = len(self.domain)
@@ -50,10 +50,17 @@ class Observable(ABC):
 		self.plot = None
 		self.desc = desc
 		self.set_render_params()
+		self.w_key = weight_key
 
 	@abstractmethod
 	def init_domain(self):
 		pass
+
+	def weight(self, e: Edge):
+		if self.w_key is None:
+			return 1.0
+		else:
+			return self.G[e[0]][e[1]][self.w_key]
 
 	''' ODE ''' 
 
@@ -100,6 +107,10 @@ class Observable(ABC):
 		self.ode.set_initial_value(replace(self.ode.y, fixed_idx, fixed_vals), t=self.t)
 		self.ode.set_f_params(fixed_idx)
 
+	@property
+	def boundary(self) -> List[GeoObject]:
+		return list(self.dirichlet_values.keys()) + list(self.neumann_values.keys())
+
 	''' Integration ''' 
 
 	def step(self, dt: float):
@@ -113,24 +124,6 @@ class Observable(ABC):
 		if self.plot is not None:
 			self.render()
 		return self.y
-
-	''' Operators ''' 
-
-	@abstractmethod
-	def partial(self, x1: GeoObject, x2: GeoObject) -> float:
-		pass
-
-	@abstractmethod
-	def grad(self) -> np.ndarray:
-		pass
-
-	@abstractmethod
-	def div(self) -> np.ndarray:
-		pass
-
-	@abstractmethod
-	def laplacian(self) -> np.ndarray: 
-		pass
 
 	''' Builtins ''' 
 
@@ -169,34 +162,13 @@ class Observable(ABC):
 ''' Observables on specific geometric objects ''' 
 
 class VertexObservable(Observable):
+
 	def init_domain(self):
 		self.domain = dict(zip(self.G.nodes(), count()))
 
-	def weight(self, edge: Edge) -> float:
-		return 1.0 # TODO
-
-	def partial(self, edge: Edge) -> float:
-		return np.sqrt(self.weight(edge)) * self(edge[1]) - self(edge[0]) 
-
-	def grad(self) -> np.ndarray:
-		return np.array([self.partial(edge) for edge in self.G.edges()])
-
-	def div(self) -> np.ndarray:
-		raise Exception('implement me')
-
-	def laplacian_at(self, x: Vertex) -> float:
-		''' Compute Laplacian that solves Neumann problem using phantom-node method '''
-		ret = sum([self.weight((x, n)) * (self(n) - self(x)) for n in self.G.neighbors(x)])
-		if x in self.neumann_values:
-			ret += self.neumann_values[x] # Assume phantom nodes are connected with weight 1
-		return ret
-
-	def laplacian(self) -> np.ndarray:
-		return np.array([self.laplacian_at(x) for x in self.G.nodes()])
-
 	def create_plot(self):
 		super().create_plot()
-		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y
+		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y 
 		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('vertex_data', self.palette, self.lo, self.hi))
 		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
@@ -208,23 +180,9 @@ class VertexObservable(Observable):
 
 
 class EdgeObservable(Observable):
+
 	def init_domain(self):
 		self.domain = dict(zip(self.G.edges(), count()))
-
-	def weight(self, edge: Edge) -> float:
-		return 1.0 # TODO
-
-	def partial(self, edge: Edge) -> float:
-		raise Exception('implement me')
-
-	def grad(self) -> np.ndarray:
-		raise Exception('implement me')
-
-	def div_at(self, x: Vertex) -> float:
-		return sum([np.sqrt(self.weight((x, n))) * (self(n) - self(x)) for n in self.G.neighbors(x)])
-
-	def div(self) -> np.ndarray:
-		return np.array([self.div_at(x) for x in self.G.nodes()])
 
 	def create_plot(self):
 		super().create_plot()
@@ -240,7 +198,31 @@ class EdgeObservable(Observable):
 		# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
 
 
-''' Multiple observables on the same graph ''' 
+''' Differential operators on observables ''' 
+
+def partial(obs: VertexObservable, e: Edge) -> float: 
+	return np.sqrt(obs.weight(e)) * obs(e[1]) - obs(e[0])
+
+def grad(obs: VertexObservable) -> np.ndarray:
+		return np.array([partial(obs, e) for e in obs.G.edges()])
+
+def div_at(obs: EdgeObservable, x: Vertex) -> float:
+	return sum([np.sqrt(obs.weight((x, n))) * (obs((n, x)) - obs((x, n))) for n in obs.G.neighbors(x)])
+
+def div(self) -> np.ndarray:
+	return np.array([div_at(obs, x) for x in obs.G.nodes()])
+
+def laplacian_at(obs: VertexObservable, x: Vertex) -> float:
+	''' Compute Laplacian that solves Neumann problem using phantom-node method '''
+	ret = sum([obs.weight((x, n)) * (obs(n) - obs(x)) for n in obs.G.neighbors(x)])
+	if x in obs.neumann_values:
+		ret += obs.neumann_values[x] # Assume phantom nodes are connected with weight 1
+	return ret
+
+def laplacian(obs: VertexObservable) -> np.ndarray:
+	return np.array([laplacian_at(obs, x) for x in obs.G.nodes()])
+
+''' Multiple observables running concurrently on a graph ''' 
 
 class System:
 	def __init__(self, observables: List[Observable], desc=''):
