@@ -4,18 +4,20 @@ import networkx as nx
 import numpy as np
 import scipy.integrate
 import dill as pickle # For pickling lambdas
-from typing import Callable, List, Tuple, Union, Any
+from typing import Callable, List, Tuple, Union, Any, Dict
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import ujson
 import pdb
 from matplotlib.colors import rgb2hex
 from bokeh.plotting import figure, from_networkx
-from bokeh.models import ColorBar, LinearColorMapper, BasicTicker
+from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool
 from bokeh.models.glyphs import Oval, MultiLine
 from bokeh.transform import linear_cmap
 import colorcet as cc
+from itertools import count, repeat
 from enum import Enum
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 
 from utils import *
 
@@ -37,7 +39,7 @@ class Observable(ABC):
 	Note: abstract base class, not intended to be instantiated.
 	''' 
 
-	def __init__(self, G: nx.Graph):
+	def __init__(self, G: nx.Graph, desc: str=''):
 		self.G = G
 		self.init_domain()
 		self.ode = None
@@ -46,6 +48,7 @@ class Observable(ABC):
 		self.dirichlet_values = dict()
 		self.neumann_values = dict()
 		self.plot = None
+		self.desc = desc
 
 	@abstractmethod
 	def init_domain(self):
@@ -53,7 +56,7 @@ class Observable(ABC):
 
 	''' ODE ''' 
 
-	def set_ode(self, f: Callable[float], order: int=1, solver: str='dopri5', **solver_args):
+	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dopri5', **solver_args):
 
 		self.ode = scipy.integrate.ode(lambda t, y: f(t)).set_integrator(solver, **solver_args)
 		self.order = order
@@ -64,7 +67,7 @@ class Observable(ABC):
 		self.t = t0
 		if isinstance(y0, Iterable):
 			self.y = np.array(y0)
-		elif isintance(y0, repeat):
+		elif isinstance(y0, repeat):
 			self.y = np.array(take(len(self), y0))
 		else:
 			self.y = np.full(len(self), y0)
@@ -88,7 +91,7 @@ class Observable(ABC):
 	def measure(self):
 		if self.ode is not None:
 			self.t = self.ode.t
-			self.y = self.ode.y
+			self.y = replace(self.ode.y, [self.domain[k] for k in self.dirichlet_values.keys()], list(self.dirichlet_values.values()))
 		if self.plot is not None:
 			self.render()
 		return self.y
@@ -123,31 +126,33 @@ class Observable(ABC):
 
 	def create_plot(self):
 		''' Create plot for rendering with Bokeh ''' 
-		G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-		layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
-		plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
-		plot.axis.visible = None
-		plot.xgrid.grid_line_color = None
-		plot.ygrid.grid_line_color = None
-		renderer = from_networkx(G, layout)
-		plot.renderers.append(renderer)
-		self.plot = plot
-		return plot
+		if self.plot is None:
+			G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
+			layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
+			plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
+			plot.axis.visible = None
+			plot.xgrid.grid_line_color = None
+			plot.ygrid.grid_line_color = None
+			renderer = from_networkx(G, layout)
+			plot.renderers.append(renderer)
+			self.plot = plot
+			return plot
 
 	@abstractmethod
 	def render(self):
 		''' Render current values to the plot ''' 
 		pass
 
+''' Observables on specific geometric objects ''' 
 
 class VertexObservable(Observable):
 	def init_domain(self):
-		self.domain = dict(zip(self.G.nodes(), itertools.count(0)))
+		self.domain = dict(zip(self.G.nodes(), count()))
 
-	def weight(edge: Edge): float:
+	def weight(self, edge: Edge) -> float:
 		return 1.0 # TODO
 
-	def partial(edge: Edge) -> float:
+	def partial(self, edge: Edge) -> float:
 		return np.sqrt(self.weight(edge)) * self(edge[1]) - self(edge[0]) 
 
 	def grad(self) -> np.ndarray:
@@ -170,27 +175,32 @@ class VertexObservable(Observable):
 		super().create_plot()
 		palette = cc.fire
 		lo, hi = 0., 1.
-		self.plot.renderers[0].node_renderer.data_source.data['nodes'] = self.y
-		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('nodes', palette, lo, hi))
-		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title='Node')
+		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y
+		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('vertex_data', palette, lo, hi))
+		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
+		self.plot.add_tools(HoverTool(tooltips=[(self.desc, '@vertex_data')]))
+		return self.plot
 
 	def render(self):
-		self.plot.renderers[0].node_renderer.data_source.data['nodes'] = self.y
+		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y
 
 
 class EdgeObservable(Observable):
 	def init_domain(self):
-		self.domain = dict(zip(self.G.edges(), itertools.count(0)))
+		self.domain = dict(zip(self.G.edges(), count()))
 
-	def partial(edge: Edge) -> float:
+	def weight(self, edge: Edge) -> float:
+		return 1.0 # TODO
+
+	def partial(self, edge: Edge) -> float:
 		raise Exception('implement me')
 
 	def grad(self) -> np.ndarray:
 		raise Exception('implement me')
 
 	def div_at(self, x: Vertex) -> float:
-		return sum([np.sqrt(self.weight(x, n)) * (self(n) - self(x)) for n in self.G.neighbors(x)])
+		return sum([np.sqrt(self.weight((x, n))) * (self(n) - self(x)) for n in self.G.neighbors(x)])
 
 	def div(self) -> np.ndarray:
 		return np.array([self.div_at(x) for x in self.G.nodes()])
@@ -199,13 +209,52 @@ class EdgeObservable(Observable):
 		super().create_plot()
 		palette = cc.gray
 		lo, hi = 0., 1.
-		self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.y
-		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edges', palette, lo, hi), line_width=5)
-		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title='Edge')
+		self.plot.renderers[0].edge_renderer.data_source.data['edge_data'] = self.y
+		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edge_data', palette, lo, hi), line_width=5)
+		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
+		# self.plot.tooltips.append((self.desc, '@edge_data'))
+		return self.plot
 
 	def render(self):
-		self.plot.renderers[0].edge_renderer.data_source.data['edges'] = self.y
+		self.plot.renderers[0].edge_renderer.data_source.data['edge_data'] = self.y
+
+
+''' Multiple observables on the same graph ''' 
+
+class System:
+	def __init__(self, observables: List[Observable], desc=''):
+		assert len(observables) > 0, 'Pass some observables'
+		assert len(observables) == len(set([type(o) for o in observables])), 'Multiple observables on the same domain not currently supported'
+		assert all([observables[0].G is o.G for o in observables]), 'All observables must be on the same graph instance'
+		self.observables = observables
+		self.plot = None
+		self.desc = desc
+
+	def create_plot(self):
+		for i, p in enumerate(self.observables):
+			if i == 0:
+				self.plot = p.create_plot()
+				self.plot.title.text = self.desc
+			else:
+				p.plot = self.plot
+				p.create_plot()
+		return self.plot
+
+	def step(self, dt: float):
+		for obs in self.observables:
+			obs.step(dt)
+
+	def measure(self):
+		ret = []
+		for obs in self.observables:
+			ret.append(obs.measure())
+		return ret
+
+	@property
+	def t(self):
+		return self.observables[0].t
+	
 
 
 ''' Main class ''' 

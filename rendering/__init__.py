@@ -10,7 +10,7 @@ from utils.zmq import pubsub_tx
 from core import GraphDiffEq
 
 
-def render_bokeh(rs: List[GraphDiffEq]):
+def render_live(rs: List[GraphDiffEq]):
 	'''Plot live simulation with Bokeh.
 	Args:
 		rs: list of graph renderers

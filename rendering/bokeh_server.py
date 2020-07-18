@@ -44,6 +44,7 @@ def update():
 	global renderers, viz_dt
 	for r in renderers:
 		r.step(viz_dt * 1e-3 * speed)
+		r.measure()
 	t2.text = str(round(renderers[0].t, 3))
 
 def pp_button_cb():

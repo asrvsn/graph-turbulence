@@ -30,4 +30,4 @@ gde = GraphDiffEq(G, v0, l0, dv_dt, dl_dt, desc='Heat equation with Dirichlet bo
 gde.set_vertex_boundary(dict(zip(dS, repeat(1.0))))
 
 # Render live
-render_bokeh([gde])
+render_live([gde])

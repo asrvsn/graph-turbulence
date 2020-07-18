@@ -38,13 +38,7 @@ def gde2():
 	v0 = np.ones(len(G.nodes()))
 	l0 = np.zeros(len(G.edges()))
 
-	temp = Observable(G, Domain.vertex)
-	temp.set_initial(1.0)
-	temp.set_neumann(domain=[(n-1,j) for j in range(1,n-1)], values=repeat(-1.0), mode='phantom')
-	temp.set_dirichlet(domain=[(i,0) for i in range(n)] + [(i,n-1) for i in range(n)] + [(0,j) for j in range(n)], values=repeat(1.0))
-	temp.set_ode(lambda t, u: -temp.laplacian(u))
-
-	pde = GraphPDE([temp])
+	pde = GraphDiffEq([temp])
 
 	# Difference equations
 	L = nx.laplacian_matrix(G)
@@ -65,4 +59,4 @@ def gde2():
 
 
 # Render live
-render_bokeh([gde1(), gde2()])
+render_live([gde1(), gde2()])
