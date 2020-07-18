@@ -38,7 +38,7 @@ class Observable(ABC):
 	Note: abstract base class, not intended to be instantiated.
 	''' 
 
-	def __init__(self, G: nx.Graph, desc: str='', weight_key: str=None):
+	def __init__(self, G: nx.Graph, desc: str='', weight_key: str=None, default_weight=1.0):
 		self.G = G
 		self.init_domain()
 		self.n = len(self.domain)
@@ -51,6 +51,7 @@ class Observable(ABC):
 		self.desc = desc
 		self.set_render_params()
 		self.w_key = weight_key
+		self.default_weight = default_weight
 
 	@abstractmethod
 	def init_domain(self):
@@ -58,7 +59,7 @@ class Observable(ABC):
 
 	def weight(self, e: Edge):
 		if self.w_key is None:
-			return 1.0
+			return self.default_weight
 		else:
 			return self.G[e[0]][e[1]][self.w_key]
 
@@ -144,7 +145,7 @@ class Observable(ABC):
 		''' Create plot for rendering with Bokeh ''' 
 		if self.plot is None:
 			G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-			layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=500, seed=1)
+			layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=1000, seed=1)
 			plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
 			plot.axis.visible = None
 			plot.xgrid.grid_line_color = None
@@ -221,6 +222,15 @@ def laplacian_at(obs: VertexObservable, x: Vertex) -> float:
 
 def laplacian(obs: VertexObservable) -> np.ndarray:
 	return np.array([laplacian_at(obs, x) for x in obs.G.nodes()])
+
+def bilaplacian_at(obs: VertexObservable, x: Vertex) -> float:
+	ret = sum([obs.weight((x, n)) * (laplacian_at(obs, n) - laplacian_at(obs, x)) for n in obs.G.neighbors(x)])
+	if x in obs.neumann_values:
+		ret += obs.neumann_values[x] # Assume phantom nodes are connected with weight 1
+	return ret
+
+def bilaplacian(obs: VertexObservable) -> np.ndarray:
+	return np.array([bilaplacian_at(obs, x) for x in obs.G.nodes()])
 
 ''' Multiple observables running concurrently on a graph ''' 
 

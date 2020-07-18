@@ -1,4 +1,4 @@
-''' Heat equation on graphs ''' 
+''' Wave equation on graphs ''' 
 
 import networkx as nx
 import numpy as np
