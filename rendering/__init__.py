@@ -7,10 +7,10 @@ import dill as pickle
 
 from utils.bokeh import serve_and_open
 from utils.zmq import pubsub_tx
-from core import GraphDiffEq
+from core.observables import System
 
 
-def render_live(rs: List[GraphDiffEq]):
+def render_live(rs: List[System]):
 	'''Plot live simulation with Bokeh.
 	Args:
 		rs: list of graph renderers

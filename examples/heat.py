@@ -18,7 +18,9 @@ def sys1():
 	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
 	temp.set_ode(lambda t: alpha*temp.laplacian())
-	temp.set_initial(y0=0.0)
+	temp.set_initial(
+		y0=lambda _: 0.0
+	)
 	temp.set_boundary(
 		dirichlet_values=dict(zip(upper + lower + left + right, [0.]*n + [0.5]*n + [1.]*n + [0.]*n))
 	)
@@ -30,7 +32,9 @@ def sys2():
 	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
 	temp.set_ode(lambda t: alpha*temp.laplacian())
-	temp.set_initial(y0=1.0)
+	temp.set_initial(
+		y0=lambda _: 1.0
+	)
 	temp.set_boundary(
 		dirichlet_values=dict(zip(upper + lower + left, repeat(1.0))), 
 		neumann_values=dict(zip(right[1:-1], repeat(-0.1)))

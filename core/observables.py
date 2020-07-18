@@ -49,6 +49,7 @@ class Observable(ABC):
 		self.neumann_values = dict()
 		self.plot = None
 		self.desc = desc
+		self.set_render_params()
 
 	@abstractmethod
 	def init_domain(self):
@@ -62,9 +63,9 @@ class Observable(ABC):
 
 		def g(t: float, y: np.ndarray, fixed_vals: list):
 			dydt = np.zeros_like(y)
-			dydt[n*(order-1):] = replace(f(t), fixed_vals, [0.]*len(fixed_vals))
 			for i in range(order-1):
 				dydt[n*i:n*(i+1)] = y[n*(i+1):n*(i+2)]
+			dydt[n*(order-1):] = replace(f(t), fixed_vals, [0.]*len(fixed_vals))
 			return dydt
 
 		self.ode = scipy.integrate.ode(g).set_integrator(solver, **solver_args).set_f_params([])
@@ -72,16 +73,20 @@ class Observable(ABC):
 
 	''' Initial & Boundary Conditions ''' 
 
-	def set_initial(self, t0: float=0., y0: Any=0., **args):
+	def set_initial(self, t0: float=0., y0: Callable[[GeoObject], float]=lambda _: 0., **kwargs):
+
+		def fill_arr(f: Callable[[GeoObject], float]) -> np.ndarray:
+			return np.array([f(x) for x in self.domain.keys()])
+
 		self.t = t0
-		self.y = fill_1d_array(y0)
+		self.y = fill_arr(y0)
 		if self.ode is not None:
 			n = len(self)
-			y0 = np.concatenate(y0, np.zeros((self.order-1)*n))
-			assert len(args) == self.order - 1, f'Only {len(args)+1} initial conditions provided but {self.order} needed'
-			for i, arg in enumerate(args.values()):
-				y0[(i+1)*n:(i+2)*n] = fill_1d_array(arg)
-			self.ode.set_initial_value(y0, self.t)
+			y0 = np.concatenate((self.y, np.zeros((self.order-1)*n)))
+			assert len(kwargs) == self.order - 1, f'{len(kwargs)+1} initial conditions provided but {self.order} needed'
+			for i, y0_i in enumerate(kwargs.values()):
+				y0[(i+1)*n:(i+2)*n] = fill_arr(y0_i)
+			self.ode.set_initial_value(y0, t=self.t)
 
 	def set_boundary(self, dirichlet_values: Dict[GeoObject, float]={}, neumann_values: Dict[GeoObject, float]={}):
 		assert self.ode is not None
@@ -90,8 +95,9 @@ class Observable(ABC):
 		self.dirichlet_values = dirichlet_values
 		self.neumann_values = neumann_values
 		fixed_idx = [self.domain[k] for k in dirichlet_values.keys()]
-		y = replace(self.y, fixed_idx, list(dirichlet_values.values()))
-		self.set_initial(t0=self.t, y0=y)
+		fixed_vals = list(dirichlet_values.values())
+		self.y = replace(self.y, fixed_idx, fixed_vals)
+		self.ode.set_initial_value(replace(self.ode.y, fixed_idx, fixed_vals), t=self.t)
 		self.ode.set_f_params(fixed_idx)
 
 	''' Integration ''' 
@@ -135,6 +141,11 @@ class Observable(ABC):
 		return self.y[self.domain[x]]
 
 	''' Rendering ''' 
+
+	def set_render_params(self, palette=cc.fire, lo=0., hi=1.):
+		self.palette = palette
+		self.lo = lo
+		self.hi = hi
 
 	def create_plot(self):
 		''' Create plot for rendering with Bokeh ''' 
@@ -185,11 +196,9 @@ class VertexObservable(Observable):
 
 	def create_plot(self):
 		super().create_plot()
-		palette = cc.fire
-		lo, hi = 0., 1.
 		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y
-		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('vertex_data', palette, lo, hi))
-		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title=self.desc)
+		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('vertex_data', self.palette, self.lo, self.hi))
+		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
 		self.plot.add_tools(HoverTool(tooltips=[(self.desc, '@vertex_data')]))
 		return self.plot
@@ -219,11 +228,9 @@ class EdgeObservable(Observable):
 
 	def create_plot(self):
 		super().create_plot()
-		palette = cc.gray
-		lo, hi = 0., 1.
 		self.plot.renderers[0].edge_renderer.data_source.data['edge_data'] = self.y
-		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edge_data', palette, lo, hi), line_width=5)
-		cbar = ColorBar(color_mapper=LinearColorMapper(palette=palette, low=lo, high=hi), ticker=BasicTicker(), title=self.desc)
+		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edge_data', self.palette, self.lo, self.hi), line_width=5)
+		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
 		# self.plot.tooltips.append((self.desc, '@edge_data'))
 		return self.plot
