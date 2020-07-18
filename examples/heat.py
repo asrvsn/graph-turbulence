@@ -5,7 +5,7 @@ import numpy as np
 from itertools import repeat
 import pdb
 
-from core.gde import *
+from core.observables import *
 from rendering import *
 
 n = 10

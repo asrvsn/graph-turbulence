@@ -14,10 +14,9 @@ from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool
 from bokeh.models.glyphs import Oval, MultiLine
 from bokeh.transform import linear_cmap
 import colorcet as cc
-from itertools import count, repeat
+from itertools import count
 from enum import Enum
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
 
 from utils import *
 
@@ -42,6 +41,7 @@ class Observable(ABC):
 	def __init__(self, G: nx.Graph, desc: str=''):
 		self.G = G
 		self.init_domain()
+		self.n = len(self.domain)
 		self.ode = None
 		self.y = np.zeros(len(self.domain))
 		self.t = 0.
@@ -58,23 +58,33 @@ class Observable(ABC):
 
 	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dopri5', **solver_args):
 
-		self.ode = scipy.integrate.ode(lambda t, y, fixed_vals: replace(f(t), fixed_vals, [0.]*len(fixed_vals))).set_integrator(solver, **solver_args).set_f_params([])
+		n = len(self)
+
+		def g(t: float, y: np.ndarray, fixed_vals: list):
+			dydt = np.zeros_like(y)
+			dydt[n*(order-1):] = replace(f(t), fixed_vals, [0.]*len(fixed_vals))
+			for i in range(order-1):
+				dydt[n*i:n*(i+1)] = y[n*(i+1):n*(i+2)]
+			return dydt
+
+		self.ode = scipy.integrate.ode(g).set_integrator(solver, **solver_args).set_f_params([])
 		self.order = order
 
 	''' Initial & Boundary Conditions ''' 
 
-	def set_initial(self, t0: float=0., y0: Any=0.):
+	def set_initial(self, t0: float=0., y0: Any=0., **args):
 		self.t = t0
-		if isinstance(y0, Iterable):
-			self.y = np.array(y0)
-		elif isinstance(y0, repeat):
-			self.y = np.array(take(len(self), y0))
-		else:
-			self.y = np.full(len(self), y0)
+		self.y = fill_1d_array(y0)
 		if self.ode is not None:
-			self.ode.set_initial_value(self.y, self.t)
+			n = len(self)
+			y0 = np.concatenate(y0, np.zeros((self.order-1)*n))
+			assert len(args) == self.order - 1, f'Only {len(args)+1} initial conditions provided but {self.order} needed'
+			for i, arg in enumerate(args.values()):
+				y0[(i+1)*n:(i+2)*n] = fill_1d_array(arg)
+			self.ode.set_initial_value(y0, self.t)
 
 	def set_boundary(self, dirichlet_values: Dict[GeoObject, float]={}, neumann_values: Dict[GeoObject, float]={}):
+		assert self.ode is not None
 		intersect = dirichlet_values.keys() & neumann_values.keys()
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 		self.dirichlet_values = dirichlet_values
@@ -93,7 +103,7 @@ class Observable(ABC):
 	def measure(self):
 		if self.ode is not None:
 			self.t = self.ode.t
-			self.y = self.ode.y
+			self.y = self.ode.y[:len(self)]
 		if self.plot is not None:
 			self.render()
 		return self.y
@@ -119,7 +129,7 @@ class Observable(ABC):
 	''' Builtins ''' 
 
 	def __len__(self):
-		return len(self.domain)
+		return self.n
 
 	def __call__(self, x: GeoObject):
 		return self.y[self.domain[x]]

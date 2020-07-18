@@ -1,1 +1,1 @@
-from .gde import *
+from .observables import *

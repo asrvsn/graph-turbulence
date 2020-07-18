@@ -1,6 +1,8 @@
 import numpy as np
 import random
 import torch
+from collections.abc import Iterable
+from itertools import repeat
 
 def set_seed(seed=None):
 	random.seed(seed)
@@ -53,3 +55,11 @@ def rms(arr: np.ndarray):
 def replace(arr: np.ndarray, replace_at: list, replace_with: np.ndarray):
 	arr[replace_at] = replace_with
 	return arr
+
+def fill_1d_array(val: Any):
+	if isinstance(val, Iterable):
+		return np.array(val)
+	elif isinstance(val, repeat):
+		return np.array(take(len(self), val))
+	else:
+		return np.full(len(self), val)
