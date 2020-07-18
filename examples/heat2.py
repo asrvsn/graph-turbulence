@@ -16,26 +16,28 @@ G = nx.grid_2d_graph(n, n)
 upper, lower, left, right = [(0,j) for j in range(n)], [(n-1,j) for j in range(n)], [(i,0) for i in range(n)], [(i,n-1) for i in range(n)]
 
 def sys1():
+	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
-	temp.set_ode(lambda t: temp.laplacian())
+	temp.set_ode(lambda t: alpha*temp.laplacian())
 	temp.set_initial(y0=0.0)
 	temp.set_boundary(
 		dirichlet_values=dict(zip(upper + lower + left + right, [0.]*n + [0.5]*n + [1.]*n + [0.]*n))
 	)
 
-	sys = System([temp], desc='Heat equation with non-uniform Dirichlet boundary conditions')
+	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
 	return sys
 
 def sys2():
+	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
-	temp.set_ode(lambda t: temp.laplacian())
+	temp.set_ode(lambda t: alpha*temp.laplacian())
 	temp.set_initial(y0=1.0)
 	temp.set_boundary(
 		dirichlet_values=dict(zip(upper + lower + left, repeat(1.0))), 
-		neumann_values=dict(zip(right[1:-1], repeat(-1.0)))
+		neumann_values=dict(zip(right[1:-1], repeat(-0.1)))
 	)
 
-	sys = System([temp], desc='Heat equation with mixed boundary conditions')
+	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with mixed boundary conditions')
 	return sys
 
 render_live([sys1(), sys2()])

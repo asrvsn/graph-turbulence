@@ -35,7 +35,7 @@ UI
 t1 = Div(text='Time:', style={'font-size':'150%'})
 t2 = Div(text='N/A', style={'font-size':'150%'})
 pp_button = Button(label='► Play', width=60)
-speed_slider = Slider(start=-2.0, end=2.0, value=-1.0, step=0.1, title='Speed', width=300)
+speed_slider = Slider(start=-2.0, end=0.5, value=-1.0, step=0.1, title='Speed', width=300)
 
 '''
 Callbacks

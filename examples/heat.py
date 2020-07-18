@@ -38,8 +38,6 @@ def gde2():
 	v0 = np.ones(len(G.nodes()))
 	l0 = np.zeros(len(G.edges()))
 
-	pde = GraphDiffEq([temp])
-
 	# Difference equations
 	L = nx.laplacian_matrix(G)
 	dv_dt = lambda t, v, l: -v@L.T

@@ -58,7 +58,7 @@ class Observable(ABC):
 
 	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dopri5', **solver_args):
 
-		self.ode = scipy.integrate.ode(lambda t, y: f(t)).set_integrator(solver, **solver_args)
+		self.ode = scipy.integrate.ode(lambda t, y, fixed_vals: replace(f(t), fixed_vals, [0.]*len(fixed_vals))).set_integrator(solver, **solver_args).set_f_params([])
 		self.order = order
 
 	''' Initial & Boundary Conditions ''' 
@@ -79,8 +79,10 @@ class Observable(ABC):
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 		self.dirichlet_values = dirichlet_values
 		self.neumann_values = neumann_values
-		y = replace(self.y, [self.domain[k] for k in dirichlet_values.keys()], list(dirichlet_values.values()))
+		fixed_idx = [self.domain[k] for k in dirichlet_values.keys()]
+		y = replace(self.y, fixed_idx, list(dirichlet_values.values()))
 		self.set_initial(t0=self.t, y0=y)
+		self.ode.set_f_params(fixed_idx)
 
 	''' Integration ''' 
 
@@ -91,7 +93,7 @@ class Observable(ABC):
 	def measure(self):
 		if self.ode is not None:
 			self.t = self.ode.t
-			self.y = replace(self.ode.y, [self.domain[k] for k in self.dirichlet_values.keys()], list(self.dirichlet_values.values()))
+			self.y = self.ode.y
 		if self.plot is not None:
 			self.render()
 		return self.y
@@ -165,7 +167,7 @@ class VertexObservable(Observable):
 		''' Compute Laplacian that solves Neumann problem using phantom-node method '''
 		ret = sum([self.weight((x, n)) * (self(n) - self(x)) for n in self.G.neighbors(x)])
 		if x in self.neumann_values:
-			ret += self.neumann_values[x]
+			ret += self.neumann_values[x] # Assume phantom nodes are connected with weight 1
 		return ret
 
 	def laplacian(self) -> np.ndarray:
@@ -218,6 +220,7 @@ class EdgeObservable(Observable):
 
 	def render(self):
 		self.plot.renderers[0].edge_renderer.data_source.data['edge_data'] = self.y
+		# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
 
 
 ''' Multiple observables on the same graph ''' 
@@ -316,6 +319,9 @@ class GraphDiffEq:
 	def l(self):
 		''' Current edge values ''' 
 		return self.l_ode.y
+
+	def measure(self):
+		pass
 
 	def set_vertex_boundary(self, dirichlet: dict={}, neumann: dict={}):
 		''' Set boundary conditions for vertex-valued function. 
