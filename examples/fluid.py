@@ -12,23 +12,21 @@ from rendering import *
 n = 10
 G = nx.grid_2d_graph(n, n)
 
-# Boundaries
-upper, lower, left, right = [(0,j) for j in range(n)], [(n-1,j) for j in range(n)], [(i,0) for i in range(n)], [(i,n-1) for i in range(n)]
-
 def sys1():
-	c = 1.0
-	ampl = VertexObservable(G, desc='Amplitude')
-	ampl.set_ode(lambda t: (c**2)*laplacian(ampl), order=2)
-	ampl.set_initial(
-		y0=lambda pos: pos[0]*pos[1]*(n-pos[0])*(n-pos[1]) / (n**3),
-		y0_1=lambda _: 0.0, 
-	)
-	ampl.set_boundary(
-		dirichlet_values=dict(zip(upper + lower + left + right, repeat(0.)))
-	)
-	ampl.set_render_params(palette=cc.bgy, lo=-ampl.y.max(), hi=ampl.y.max())
+	pressure = VertexObservable(G, desc='Pressure')
+	velocity = EdgeObservable(G, desc='Velocity')
 
-	sys = System([ampl], desc=f'Wave equation (c={c}) with fixed boundary conditions')
+	velocity.set_ode(lambda t: -velocity.y@grad(velocity) - grad(pressure))
+
+	pressure.set_initial(y0=lambda _: 0)
+	pressure.set_boundary(dirichlet_values={(3,3): 1.0, (7,7): -1.0})
+	pressure.set_render_params(lo=-1.0, hi=1.0)
+
+	velocity.set_initial(y0=lambda _: 0)
+	velocity.set_boundary(dirichlet_values={((3,3), (3,4)): 1.0})
+	velocity.set_render_params(palette=cc.kgy)
+
+	sys = System([pressure, velocity], desc=f'A test fluid flow')
 	return sys
 
 if __name__ == '__main__':

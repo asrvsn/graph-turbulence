@@ -97,7 +97,6 @@ class Observable(ABC):
 			self.ode.set_initial_value(y0, t=self.t)
 
 	def set_boundary(self, dirichlet_values: Dict[GeoObject, float]={}, neumann_values: Dict[GeoObject, float]={}):
-		assert self.ode is not None
 		intersect = dirichlet_values.keys() & neumann_values.keys()
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 		self.dirichlet_values = dirichlet_values
@@ -105,8 +104,9 @@ class Observable(ABC):
 		fixed_idx = [self.domain[k] for k in dirichlet_values.keys()]
 		fixed_vals = list(dirichlet_values.values())
 		self.y = replace(self.y, fixed_idx, fixed_vals)
-		self.ode.set_initial_value(replace(self.ode.y, fixed_idx, fixed_vals), t=self.t)
-		self.ode.set_f_params(fixed_idx)
+		if self.ode is not None:
+			self.ode.set_initial_value(replace(self.ode.y, fixed_idx, fixed_vals), t=self.t)
+			self.ode.set_f_params(fixed_idx)
 
 	@property
 	def boundary(self) -> List[GeoObject]:
