@@ -31,7 +31,7 @@ def sys1():
 def sys2():
 	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
-	temp.set_ode(lambda t: alpha*temp.laplacian())
+	temp.set_ode(lambda t: alpha*laplacian(temp))
 	temp.set_initial(
 		y0=lambda _: 1.0
 	)

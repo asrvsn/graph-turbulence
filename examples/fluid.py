@@ -1,4 +1,4 @@
-''' Wave equation on graphs ''' 
+''' Incompressible Navier-Stokes on graphs ''' 
 
 import networkx as nx
 import numpy as np
@@ -26,7 +26,7 @@ def sys1():
 	velocity.set_boundary(dirichlet_values={((3,3), (3,4)): 1.0})
 	velocity.set_render_params(palette=cc.kgy)
 
-	sys = System([pressure, velocity], desc=f'A test fluid flow')
+	sys = System([pressure, velocity], desc=f'A test fluid flow with pressure inlet and outlet')
 	return sys
 
 if __name__ == '__main__':

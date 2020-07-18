@@ -136,16 +136,17 @@ class Observable(ABC):
 
 	''' Rendering ''' 
 
-	def set_render_params(self, palette=cc.fire, lo=0., hi=1.):
+	def set_render_params(self, palette=cc.fire, lo=0., hi=1., n_layout_iters=500):
 		self.palette = palette
 		self.lo = lo
 		self.hi = hi
+		self.n_layout_iters = n_layout_iters
 
 	def create_plot(self):
 		''' Create plot for rendering with Bokeh ''' 
 		if self.plot is None:
 			G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-			layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=1000, seed=1)
+			layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=self.n_layout_iters, seed=1)
 			plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
 			plot.axis.visible = None
 			plot.xgrid.grid_line_color = None
@@ -153,7 +154,7 @@ class Observable(ABC):
 			renderer = from_networkx(G, layout)
 			plot.renderers.append(renderer)
 			self.plot = plot
-			return plot
+		return self.plot
 
 	@abstractmethod
 	def render(self):
@@ -169,15 +170,16 @@ class VertexObservable(Observable):
 
 	def create_plot(self):
 		super().create_plot()
-		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y 
-		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('vertex_data', self.palette, self.lo, self.hi))
+		self.plot.renderers[0].node_renderer.data_source.data['node'] = list(self.G.nodes())
+		self.plot.renderers[0].node_renderer.data_source.data['node_data'] = self.y 
+		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('node_data', self.palette, self.lo, self.hi))
 		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
-		self.plot.add_tools(HoverTool(tooltips=[(self.desc, '@vertex_data')]))
+		self.plot.add_tools(HoverTool(tooltips=[(self.desc, '@node_data'), ('node', '@node')]))
 		return self.plot
 
 	def render(self):
-		self.plot.renderers[0].node_renderer.data_source.data['vertex_data'] = self.y
+		self.plot.renderers[0].node_renderer.data_source.data['node_data'] = self.y
 
 
 class EdgeObservable(Observable):
@@ -205,7 +207,7 @@ def partial(obs: VertexObservable, e: Edge) -> float:
 	return np.sqrt(obs.weight(e)) * obs(e[1]) - obs(e[0])
 
 def grad(obs: VertexObservable) -> np.ndarray:
-		return np.array([partial(obs, e) for e in obs.G.edges()])
+	return np.array([partial(obs, e) for e in obs.G.edges()])
 
 def div_at(obs: EdgeObservable, x: Vertex) -> float:
 	return sum([np.sqrt(obs.weight((x, n))) * (obs((n, x)) - obs((x, n))) for n in obs.G.neighbors(x)])
@@ -258,10 +260,7 @@ class System:
 			obs.step(dt)
 
 	def measure(self):
-		ret = []
-		for obs in self.observables:
-			ret.append(obs.measure())
-		return ret
+		return [obs.measure() for obs in self.observables]
 
 	@property
 	def t(self):

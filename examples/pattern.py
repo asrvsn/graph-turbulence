@@ -1,4 +1,4 @@
-''' Swift-Hohenberg patterns ''' 
+''' Swift-Hohenberg pattern formation ''' 
 
 import networkx as nx
 import numpy as np
@@ -12,17 +12,14 @@ from rendering import *
 n = 20
 G = nx.grid_2d_graph(n, n)
 
-# Boundaries
-upper, lower, left, right = [(0,j) for j in range(n)], [(n-1,j) for j in range(n)], [(i,0) for i in range(n)], [(i,n-1) for i in range(n)]
-
 def swift_hohenberg(desc: str, a: float, b: float, c: float, gam0: float, gam2: float):
 	assert c > 0, 'Unstable'
-	ampl = VertexObservable(G, desc='Density', default_weight=0.55)
+	ampl = VertexObservable(G, desc='Amplitude', default_weight=0.55)
 	ampl.set_ode(lambda t: -a*ampl.y - b*(ampl.y**2) -c*(ampl.y**3) + gam0*laplacian(ampl) - gam2*bilaplacian(ampl))
 	ampl.set_initial(
 		y0=lambda pos: np.random.uniform(),
 	)
-	ampl.set_render_params(palette=cc.bgy, lo=-2., hi=2.)
+	ampl.set_render_params(palette=cc.bgy, lo=-2., hi=2., n_layout_iters=1000)
 
 	sys = System([ampl], desc=desc)
 	return sys
