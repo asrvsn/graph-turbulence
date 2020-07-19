@@ -98,18 +98,25 @@ def solve_lattice(dx: tuple, mx: tuple, u0: np.ndarray, dirichlet_bc: dict={}, n
 		dudt = np.empty_like(u)
 		for i in range(len(u)):
 			coord = map_1d_to_nd(mx, i) # embedding nd coords in 1d for solve_ivp() API & to match other funcs
-			# Check boundary conditions
-			if coord in dirichlet_bc.keys():
+			# Check Dirichlet conditions
+			if coord in dirichlet_bc:
 				dudt[i] = 0
-			elif coord in neumann_bc.keys():
-				raise Exception('Neumann conditions not implemented yet') # TODO
+			# Compute discrete Laplacian respecting Neumann conditions
 			else:
-			# Compute discrete Laplacian
 				Lu = 0
 				for c_i in range(d):
-					below = map_nd_to_1d(mx, (*coord[:c_i], coord[c_i]-1, *coord[c_i+1:]))
 					above = map_nd_to_1d(mx, (*coord[:c_i], coord[c_i]+1, *coord[c_i+1:]))
-					Lu += (u[below] - 2*u[i] + u[above]) / (dx[c_i] ** 2)
+					below = map_nd_to_1d(mx, (*coord[:c_i], coord[c_i]-1, *coord[c_i+1:]))
+					if coord[c_i] == 0:
+						assert coord in neumann_bc, f'Boundary condition at {coord} not specified'
+						ghost = u[above] - 2*dx[c_i]*neumann_bc[coord]
+						Lu += (ghost - 2*u[i] + u[above]) / (dx[c_i] ** 2)
+					elif coord[c_i] == mx[c_i] - 1:
+						assert coord in neumann_bc, f'Boundary condition at {coord} not specified'
+						ghost = u[below] - 2*dx[c_i]*neumann_bc[coord]
+						Lu += (u[below] - 2*u[i] + ghost) / (dx[c_i] ** 2)
+					else:
+						Lu += (u[below] - 2*u[i] + u[above]) / (dx[c_i] ** 2)
 				dudt[i] = alpha*Lu
 		return dudt
 	u0 = match_ic_bc(u0, lambda i: map_1d_to_nd(mx, i), dirichlet_bc=dirichlet_bc, neumann_bc=neumann_bc)

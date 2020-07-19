@@ -6,6 +6,7 @@ from itertools import repeat
 import pdb
 
 from core.observables import *
+from core.fd import fd_diffusion
 from rendering import *
 
 n = 10
@@ -28,6 +29,23 @@ def sys1():
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
 	return sys
 
+def sys1_finite():
+	''' Finite-difference version of sys1 ''' 
+	alpha = 1.0
+	dx = 1.0
+	dirichlet = dict(zip(upper + lower + left + right, [0.]*n + [0.5]*n + [1.]*n + [0.]*n))
+	f = fd_diffusion((dx, dx), (n, n), dirichlet_bc=dirichlet, alpha=alpha)
+
+	temp = VertexObservable(G, desc='Temperature')
+	temp.set_ode(lambda t: f(t, temp.y))
+	temp.set_initial(
+		y0=lambda _: 0.0
+	)
+	temp.set_boundary(dirichlet_values=dirichlet)
+
+	sys = System([temp], desc=f'(Finite-difference) Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
+	return sys
+
 def sys2():
 	alpha = 1.0
 	temp = VertexObservable(G, desc='Temperature')
@@ -43,5 +61,39 @@ def sys2():
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with mixed boundary conditions')
 	return sys
 
+def sys2_finite():
+	alpha = 1.0
+	dx = 2.0
+	dirichlet = dict(zip(upper + lower + left, repeat(1.0)))
+	neumann = dict(zip(right[1:-1], repeat(-0.1)))
+	f = fd_diffusion((dx, dx), (n, n), dirichlet_bc=dirichlet, neumann_bc=neumann, alpha=alpha)
+
+	temp = VertexObservable(G, desc='Temperature')
+	temp.set_ode(lambda t: f(t, temp.y))
+	temp.set_initial(
+		y0=lambda _: 1.0
+	)
+	temp.set_boundary(dirichlet_values=dirichlet, neumann_values=neumann)
+
+	sys = System([temp], desc=f'(Finite-difference) Heat equation (alpha={alpha}) with mixed boundary conditions')
+	return sys
+
+def sys3():
+	alpha = 1.0
+	temp = VertexObservable(G, desc='Temperature')
+	temp.set_ode(lambda t: alpha*laplacian(temp))
+	temp.set_initial(
+		y0=lambda _: 1.0
+	)
+	temp.set_boundary(
+		dirichlet_values=dict(zip(upper + lower + left, [1.0]*n + [1.0]*n + [0.2]*n)), 
+		neumann_values=dict(zip(right[1:-1], repeat(0.)))
+	)
+
+	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with 3 fixed sides and 1 insulated side')
+	return sys
+
+
+
 if __name__ == '__main__':
-	render_live([sys1(), sys2()])
+	render_live([sys1(), sys1_finite(), sys2(), sys2_finite()])

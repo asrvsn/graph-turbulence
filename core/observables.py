@@ -22,19 +22,13 @@ from utils import *
 
 ''' Basic types ''' 
 
-class Domain(Enum):
-	Vertex = 0
-	Edge = 1
-	# Can extend...
-	# Face = 2
-
 Vertex = Any
 Edge = Tuple[Vertex, Vertex]
-# Face = Tuple[Vertex, ...]
+Face = Tuple[Vertex, ...]
 GeoObject = Union[Vertex, Edge]
 
 class Observable(ABC):
-	''' A real-valued function defined on a graph 
+	''' A real-valued function defined on a graph domain
 	Note: abstract base class, not intended to be instantiated.
 	''' 
 
@@ -57,7 +51,7 @@ class Observable(ABC):
 	def init_domain(self):
 		pass
 
-	def weight(self, e: Edge):
+	def weight(self, e: Edge) -> float:
 		if self.w_key is None:
 			return self.default_weight
 		else:
@@ -118,7 +112,7 @@ class Observable(ABC):
 		if self.ode is not None:
 			self.ode.integrate(self.t + dt)
 
-	def measure(self):
+	def measure(self) -> np.ndarray:
 		if self.ode is not None:
 			self.t = self.ode.t
 			self.y = self.ode.y[:len(self)]
@@ -219,7 +213,7 @@ def laplacian_at(obs: VertexObservable, x: Vertex) -> float:
 	''' Compute Laplacian that solves Neumann problem using phantom-node method '''
 	ret = sum([obs.weight((x, n)) * (obs(n) - obs(x)) for n in obs.G.neighbors(x)])
 	if x in obs.neumann_values:
-		ret += obs.neumann_values[x] # Assume phantom nodes are connected with weight 1
+		ret += np.sqrt(obs.default_weight) * obs.neumann_values[x] 
 	return ret
 
 def laplacian(obs: VertexObservable) -> np.ndarray:
@@ -228,7 +222,7 @@ def laplacian(obs: VertexObservable) -> np.ndarray:
 def bilaplacian_at(obs: VertexObservable, x: Vertex) -> float:
 	ret = sum([obs.weight((x, n)) * (laplacian_at(obs, n) - laplacian_at(obs, x)) for n in obs.G.neighbors(x)])
 	if x in obs.neumann_values:
-		ret += obs.neumann_values[x] # Assume phantom nodes are connected with weight 1
+		ret += np.sqrt(obs.default_weight) * obs.neumann_values[x] 
 	return ret
 
 def bilaplacian(obs: VertexObservable) -> np.ndarray:
@@ -259,9 +253,9 @@ class System:
 		for obs in self.observables:
 			obs.step(dt)
 
-	def measure(self):
+	def measure(self) -> List[np.ndarray]:
 		return [obs.measure() for obs in self.observables]
 
 	@property
-	def t(self):
+	def t(self) -> float:
 		return self.observables[0].t
