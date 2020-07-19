@@ -38,7 +38,10 @@ class Observable(ABC):
 		self.n = len(self.domain)
 		self.ode = None
 		self.y = np.zeros(len(self.domain))
+		self.y0 = lambda _: 0.
 		self.t = 0.
+		self.t0 = 0.
+		self.init_kwargs = {}
 		self.dirichlet_values = dict()
 		self.neumann_values = dict()
 		self.plot = None
@@ -80,8 +83,11 @@ class Observable(ABC):
 		def fill_arr(f: Callable[[GeoObject], float]) -> np.ndarray:
 			return np.array([f(x) for x in self.domain.keys()])
 
+		self.t0 = t0
 		self.t = t0
+		self.y0 = y0
 		self.y = fill_arr(y0)
+		self.init_kwargs = kwargs
 		if self.ode is not None:
 			n = len(self)
 			y0 = np.concatenate((self.y, np.zeros((self.order-1)*n)))
@@ -119,6 +125,9 @@ class Observable(ABC):
 		if self.plot is not None:
 			self.render()
 		return self.y
+
+	def reset(self):
+		self.set_initial(t0=self.t0, y0=self.y0, **self.init_kwargs)
 
 	''' Builtins ''' 
 
@@ -255,6 +264,10 @@ class System:
 
 	def measure(self) -> List[np.ndarray]:
 		return [obs.measure() for obs in self.observables]
+
+	def reset(self):
+		for obs in self.observables:
+			obs.reset()
 
 	@property
 	def t(self) -> float:

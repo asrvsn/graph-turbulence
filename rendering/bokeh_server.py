@@ -34,6 +34,7 @@ UI
 
 t1 = Div(text='Time:', style={'font-size':'150%'})
 t2 = Div(text='N/A', style={'font-size':'150%'})
+reset_button = Button(label='⟲ Reset', width=60)
 pp_button = Button(label='► Play', width=60)
 speed_slider = Slider(start=-2.0, end=0.5, value=-1.0, step=0.1, title='Speed', width=300)
 
@@ -46,6 +47,14 @@ def update():
 		r.step(viz_dt * 1e-3 * speed)
 		r.measure()
 	t2.text = str(round(renderers[0].t, 3))
+
+def reset_button_cb():
+	global renderers
+	for r in renderers:
+		r.reset()
+		r.measure()
+	t2.text = str(round(renderers[0].t, 3))
+reset_button.on_click(reset_button_cb)
 
 def pp_button_cb():
 	global viz_dt, render_callback
@@ -68,7 +77,7 @@ Layout
 
 root = column(
 	row([t1, t2]),
-	row([pp_button, speed_slider]),
+	row([reset_button, pp_button, speed_slider]),
 )
 root.sizing_mode = 'stretch_both'
 doc.add_root(root)
