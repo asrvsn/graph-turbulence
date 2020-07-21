@@ -93,7 +93,26 @@ def sys3():
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with 3 fixed sides and 1 insulated side')
 	return sys
 
+def sys4():
+	G = nx.random_geometric_graph(100, 0.125)
+	dV = random.choices(list(G.nodes()), k=20) # boundary
+	alpha = 1.0
+	temp = VertexObservable(G, desc='Temperature', default_weight=0.6)
+	temp.set_ode(lambda t: alpha*laplacian(temp))
+	temp.set_initial(
+		y0=lambda _: 0.
+	)
+	temp.set_boundary(
+		dirichlet_values=dict(zip(dV, repeat(0.7)))
+	)
+	def layout(g):
+		pos = nx.get_node_attributes(g, 'pos')
+		pos = {k: (np.array(v) - 0.5)*2 for k, v in pos.items()}
+		return pos
+	temp.set_render_params(layout_func=layout)
 
+	sys = System([temp], desc=f'Heat equation (alpha={alpha}) on random geometric graph')
+	return sys
 
 if __name__ == '__main__':
-	render_live([sys1(), sys1_finite(), sys2(), sys2_finite()])
+	render_live([sys4()])

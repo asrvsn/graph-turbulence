@@ -139,17 +139,20 @@ class Observable(ABC):
 
 	''' Rendering ''' 
 
-	def set_render_params(self, palette=cc.fire, lo=0., hi=1., n_layout_iters=500):
+	def set_render_params(self, palette=cc.fire, lo=0., hi=1., layout_func=None, n_spring_iters=500):
 		self.palette = palette
 		self.lo = lo
 		self.hi = hi
-		self.n_layout_iters = n_layout_iters
+		if layout_func is None:
+			self.layout_func = lambda G:  nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1)
+		else:
+			self.layout_func = layout_func
 
 	def create_plot(self):
 		''' Create plot for rendering with Bokeh ''' 
 		if self.plot is None:
 			G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-			layout = nx.spring_layout(G, scale=0.9, center=(0,0), iterations=self.n_layout_iters, seed=1)
+			layout = self.layout_func(G)
 			plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
 			plot.axis.visible = None
 			plot.xgrid.grid_line_color = None
