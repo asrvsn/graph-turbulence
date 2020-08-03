@@ -4,14 +4,14 @@ import numpy as np
 from functools import partial
 from threading import Thread
 from tornado import gen
-import dill as pickle
+import pickle 
 
 from bokeh.plotting import figure, output_file, show, curdoc, from_networkx
 from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
 from bokeh.layouts import row, column, gridplot, widgetbox
 from bokeh.models.widgets import Div
 
-from utils.zmq import pubsub_rx
+from utils.zmq import ipc_rx
 from rendering import *
 
 # Save curdoc() to make sure all threads see the same document.
@@ -23,7 +23,7 @@ Variables
 '''
 
 plots = {}
-renderers = []
+systems = []
 render_callback = None
 speed = 0.1 
 viz_dt = 50 # update every ms
@@ -42,18 +42,18 @@ speed_slider = Slider(start=-2.0, end=0.5, value=-1.0, step=0.1, title='Speed', 
 Callbacks
 '''
 def update():
-	global renderers, viz_dt
-	for r in renderers:
+	global systems, viz_dt
+	for r in systems:
 		r.step(viz_dt * 1e-3 * speed)
 		r.measure()
-	t2.text = str(round(renderers[0].t, 3))
+	t2.text = str(round(systems[0].t, 3))
 
 def reset_button_cb():
-	global renderers
-	for r in renderers:
+	global systems
+	for r in systems:
 		r.reset()
 		r.measure()
-	t2.text = str(round(renderers[0].t, 3))
+	t2.text = str(round(systems[0].t, 3))
 reset_button.on_click(reset_button_cb)
 
 def pp_button_cb():
@@ -89,17 +89,18 @@ Updates
 
 @gen.coroutine
 def react(msg):
-	global renderers, viz_dt
+	global systems, viz_dt
 	# print(msg)
 	if msg['tag'] == 'init':
-		renderers = [pickle.loads(r.encode('latin1')) for r in msg['renderers']]
-		for r in renderers:
+		system_funcs = [pickle.loads(r.encode('latin1')) for r in msg['systems']]
+		systems = [f() for f in system_funcs]
+		for r in systems:
 			plots[r.desc] = r.create_plot()
 		grid = gridplot(children=list(plots.values()), ncols=2, sizing_mode='scale_both', toolbar_location=None)
 		root.children.append(grid)
 
 def stream_data():
-	ctx, rx = pubsub_rx()
+	ctx, rx = ipc_rx()
 	try:
 		while True:
 			msg = rx()
@@ -107,5 +108,6 @@ def stream_data():
 	finally:
 		ctx.destroy()
 
+print('Bokeh started')
 thread = Thread(target=stream_data)
 thread.start()

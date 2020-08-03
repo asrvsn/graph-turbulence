@@ -144,7 +144,7 @@ class Observable(ABC):
 		self.lo = lo
 		self.hi = hi
 		if layout_func is None:
-			self.layout_func = lambda G:  nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1)
+			self.layout_func = lambda G: nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1)
 		else:
 			self.layout_func = layout_func
 

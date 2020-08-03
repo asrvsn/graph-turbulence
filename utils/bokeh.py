@@ -1,8 +1,8 @@
 from tornado.ioloop import IOLoop
 from bokeh.command.util import build_single_handler_applications
 from bokeh.server.server import Server
+from bokeh.util.browser import view
 from multiprocessing import Process
-import webbrowser
 
 bokeh_host = 'localhost'
 bokeh_port = 8080
@@ -30,11 +30,11 @@ def start_server(filepath: str, host: str, port: int):
 		'use_index':True
 	}
 	srv = Server(apps,**kwags)
+	io_loop.add_callback(view, 'http://{}:{}'.format(bokeh_host, bokeh_port))
 	io_loop.start()
 
-def serve_and_open(filepath: str, host: str=bokeh_host, port: int=bokeh_port):
+def serve(filepath: str, host: str=bokeh_host, port: int=bokeh_port):
 	proc = Process(target=start_server, args=(filepath, host, port))
 	proc.start()
-	webbrowser.open_new_tab('http://{}:{}'.format(host, port))
 	print('Server started')
 	return proc

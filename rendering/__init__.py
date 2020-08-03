@@ -3,26 +3,27 @@
 from typing import Callable, List
 from pathlib import Path
 import time
-import dill as pickle
+import pickle 
+import webbrowser
 
-from utils.bokeh import serve_and_open
-from utils.zmq import pubsub_tx
+from utils.bokeh import serve, bokeh_host, bokeh_port
+from utils.zmq import ipc_tx
 from core.observables import System
 
 
-def render_live(rs: List[System]):
+def render_live(rs: List[Callable]):
 	'''Plot live simulation with Bokeh.
 	Args:
-		rs: list of graph renderers
+		rs: list of (top-level) functions that produce `System`s when called.
 	'''
 	path = str(Path(__file__).parent / 'bokeh_server.py')
-	proc = serve_and_open(path)
-	ctx, tx = pubsub_tx()
+	proc = serve(path)
+	ctx, tx = ipc_tx()
 
 	try:
 		print('Waiting for server to initialize...')
-		time.sleep(2) 
-		tx({'tag': 'init', 'renderers': [pickle.dumps(r).decode('latin1') for r in rs]})
+		# webbrowser.open_new_tab('http://{}:{}'.format(bokeh_host, bokeh_port))
+		tx({'tag': 'init', 'systems': [pickle.dumps(r).decode('latin1') for r in rs]})
 		print('Done.')
 		while True: 
 			time.sleep(1) # Let bokeh continue to handle interactivity while we wait
