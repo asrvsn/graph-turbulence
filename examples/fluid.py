@@ -22,12 +22,14 @@ def sys1():
 	pressure.set_boundary(dirichlet_values={(3,3): 1.0, (7,7): -1.0})
 	pressure.set_render_params(lo=-1.0, hi=1.0)
 
-	velocity.set_initial(y0=lambda _: 0)
-	velocity.set_boundary(dirichlet_values={((3,3), (3,4)): 1.0})
+	velocity.set_initial(y0=lambda _: 1.0)
+	# velocity.set_boundary(dirichlet_values={((3,3), (3,4)): 1.0})
 	velocity.set_render_params(palette=cc.kgy)
 
-	sys = System([pressure, velocity], desc=f'A test fluid flow with pressure inlet and outlet')
+	sys = System([velocity, pressure], desc=f'A test fluid flow')
 	return sys
 
 if __name__ == '__main__':
-	render_live([sys1()])
+	# s = sys1()
+	# s.create_plot()
+	render_live([sys1])

@@ -2,6 +2,7 @@
 
 import networkx as nx
 import numpy as np
+import pandas as pd
 import scipy.integrate
 import dill as pickle # For pickling lambdas
 from typing import Callable, List, Tuple, Union, Any, Dict
@@ -9,14 +10,15 @@ from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import ujson
 import pdb
 from matplotlib.colors import rgb2hex
-from bokeh.plotting import figure, from_networkx
-from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool
-from bokeh.models.glyphs import Oval, MultiLine
-from bokeh.transform import linear_cmap
 import colorcet as cc
 from itertools import count
 from enum import Enum
 from abc import ABC, abstractmethod
+
+from bokeh.plotting import figure, from_networkx
+from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead
+from bokeh.models.glyphs import Oval, MultiLine
+from bokeh.transform import linear_cmap
 
 from utils import *
 
@@ -155,12 +157,12 @@ class Observable(ABC):
 		''' Create plot for rendering with Bokeh ''' 
 		if self.plot is None:
 			G = nx.convert_node_labels_to_integers(self.G) # Bokeh cannot handle non-primitive node keys (eg. tuples)
-			layout = self.layout_func(G)
+			self.layout = self.layout_func(G)
 			plot = figure(x_range=(-1.1,1.1), y_range=(-1.1,1.1), tooltips=[])
 			plot.axis.visible = None
 			plot.xgrid.grid_line_color = None
 			plot.ygrid.grid_line_color = None
-			renderer = from_networkx(G, layout)
+			renderer = from_networkx(G, self.layout)
 			plot.renderers.append(renderer)
 			self.plot = plot
 		return self.plot
@@ -196,13 +198,31 @@ class EdgeObservable(Observable):
 
 	def init_domain(self):
 		self.domain = dict(zip(self.G.edges(), count()))
+		self.orientation = np.ones(len(self.G.edges())) # Arbitrarily assign a +1 orientation to the edge ordering stored by networkx
 
 	def create_plot(self):
 		super().create_plot()
 		self.plot.renderers[0].edge_renderer.data_source.data['edge_data'] = self.y
+		G = nx.convert_node_labels_to_integers(self.G)
+		layout_coords = pd.DataFrame(
+			[[self.layout[x1][0], self.layout[x1][1], self.layout[x2][0], self.layout[x2][1]] for (x1, x2) in G.edges()],
+			columns=['x_start', 'y_start', 'x_end', 'y_end']
+		)
+		layout_coords['x_end'] = (layout_coords['x_end'] - layout_coords['x_start']) / 2 + layout_coords['x_start']
+		layout_coords['y_end'] = (layout_coords['y_end'] - layout_coords['y_start']) / 2 + layout_coords['y_start']
+		self.plot.renderers[0].edge_renderer.data_source.data['x_start'] = layout_coords['x_start']
+		self.plot.renderers[0].edge_renderer.data_source.data['y_start'] = layout_coords['y_start']
+		self.plot.renderers[0].edge_renderer.data_source.data['x_end'] = layout_coords['x_end']
+		self.plot.renderers[0].edge_renderer.data_source.data['y_end'] = layout_coords['y_end']
 		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edge_data', self.palette, self.lo, self.hi), line_width=5)
 		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
 		self.plot.add_layout(cbar, 'right')
+		arrows = Arrow(
+			end=VeeHead(size=8), 
+			x_start='x_start', y_start='y_start', x_end='x_end', y_end='y_end', line_width=0, 
+			source=self.plot.renderers[0].edge_renderer.data_source
+		)
+		self.plot.add_layout(arrows)
 		# self.plot.tooltips.append((self.desc, '@edge_data'))
 		return self.plot
 
