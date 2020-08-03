@@ -10,7 +10,7 @@ def fd_diffusion(dx: tuple, mx: tuple, dirichlet_bc: dict={}, neumann_bc: dict={
 		dx: tuple of differences (dx1, dx2, ... dxn)
 		mx: tuple of # points (mx1, mx2, ... mxn)
 		dirichlet_bc: dict mapping boundary nodes to dirichlet conditions 
-		neumann_bc: dict mapping boundary nodes to neumann conditions 
+		neumann_bc: dict mapping boundary nodes to neumann conditions (the implicit orientation of directional derivatice is assumed in the direction of the boundary, as opposed to direction given by coordinate frame, for convenience)
 		corner_once: only apply Neumann conditions at corners once
 	'''
 	assert len(dx) == len(mx), 'Dimensions of steps and extents mismatch'
@@ -32,12 +32,12 @@ def fd_diffusion(dx: tuple, mx: tuple, dirichlet_bc: dict={}, neumann_bc: dict={
 					below = map_nd_to_1d(mx, (*coord[:c_i], coord[c_i]-1, *coord[c_i+1:]))
 					if coord[c_i] == 0:
 						assert coord in neumann_bc, f'Boundary condition at {coord} not specified'
-						ghost = 2*dx[c_i]*(0. if neumann_off else neumann_bc[coord]) - u[above]
+						ghost = u[above] + 2*dx[c_i]*(0. if neumann_off else neumann_bc[coord]) 
 						Lu += (ghost - 2*u[i] + u[above]) / (dx[c_i] ** 2)
 						neumann_off = corner_once
 					elif coord[c_i] == mx[c_i] - 1:
 						assert coord in neumann_bc, f'Boundary condition at {coord} not specified'
-						ghost = 2*dx[c_i]*(0. if neumann_off else neumann_bc[coord]) - u[below]
+						ghost = u[below] + 2*dx[c_i]*(0. if neumann_off else neumann_bc[coord]) 
 						Lu += (u[below] - 2*u[i] + ghost) / (dx[c_i] ** 2)
 						neumann_off = corner_once
 					else:

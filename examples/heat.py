@@ -63,7 +63,7 @@ def sys2():
 
 def sys2_finite():
 	alpha = 1.0
-	dx = 2.0
+	dx = 1.0
 	dirichlet = dict(zip(upper + lower + left, repeat(1.0)))
 	neumann = dict(zip(right[1:-1], repeat(-0.1)))
 	f = fd_diffusion((dx, dx), (n, n), dirichlet_bc=dirichlet, neumann_bc=neumann, alpha=alpha)
@@ -115,4 +115,4 @@ def sys4():
 	return sys
 
 if __name__ == '__main__':
-	render_live([sys4])
+	render_live([sys2, sys2_finite])
