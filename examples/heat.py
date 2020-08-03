@@ -29,6 +29,20 @@ def sys1():
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
 	return sys
 
+def sys1_decomp():
+	alpha = 1.0
+	temp = VertexObservable(G, desc='Temperature')
+	temp.set_ode(lambda t: alpha*laplacian(temp))
+	temp.set_initial(
+		y0=lambda _: 0.0
+	)
+	temp.set_boundary(
+		dirichlet_values=dict(zip(upper + lower + left + right, [0.]*n + [0.5]*n + [1.]*n + [0.]*n))
+	)
+
+	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
+	return [sys, cycle_basis_view(temp)]
+
 def sys1_finite():
 	''' Finite-difference version of sys1 ''' 
 	alpha = 1.0
@@ -115,4 +129,4 @@ def sys4():
 	return sys
 
 if __name__ == '__main__':
-	render_live([[sys2, sys2_finite]])
+	render_live([sys1_decomp])

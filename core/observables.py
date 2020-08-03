@@ -39,6 +39,7 @@ class Observable(ABC):
 		self.init_domain()
 		self.n = len(self.domain)
 		self.ode = None
+		self.track_other = None
 		self.y = np.zeros(len(self))
 		self.y0 = lambda _: 0.
 		self.t = 0.
@@ -63,7 +64,7 @@ class Observable(ABC):
 		else:
 			return self.G[e[0]][e[1]][self.w_key]
 
-	''' ODE ''' 
+	''' ODE & updating ''' 
 
 	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dop853', **solver_args):
 
@@ -79,6 +80,13 @@ class Observable(ABC):
 		solver_args['max_step'] = 1e-3
 		self.ode = scipy.integrate.ode(g).set_integrator(solver, **solver_args).set_f_params([])
 		self.order = order
+
+	def track(self, other: 'Observable'):
+		''' Track the values of another observable, assuming self.G is a subgraph ''' 
+		assert type(self).__name__ == type(other).__name__, 'Cannot track observable of another type'
+		assert self.ode is None, 'Cannot track values and compute ODE together'
+		assert all(k in other.domain for k in self.domain)
+		self.track_other = other
 
 	''' Initial & Boundary Conditions ''' 
 
@@ -127,12 +135,19 @@ class Observable(ABC):
 		if self.ode is not None:
 			self.t = self.ode.t
 			self.y = self.ode.y[:len(self)]
+		elif self.track_other is not None:
+			self.t = self.track_other.t
+			self.y = self.track_other.y[list(self.domain.values())]
+
 		if self.plot is not None:
 			self.render()
 		return self.y
 
 	def reset(self):
-		self.set_initial(t0=self.t0, y0=self.y0, **self.init_kwargs)
+		if self.track_other is None:
+			self.set_initial(t0=self.t0, y0=self.y0, **self.init_kwargs)
+		else:
+			self.set_initial(t0=self.track_other.t0, y0=self.track_other.y0)
 
 	''' Builtins ''' 
 
@@ -144,10 +159,11 @@ class Observable(ABC):
 
 	''' Rendering ''' 
 
-	def set_render_params(self, palette=cc.fire, lo=0., hi=1., layout_func=None, n_spring_iters=500):
+	def set_render_params(self, palette=cc.fire, lo=0., hi=1., layout_func=None, n_spring_iters=500, show_bar=True):
 		self.palette = palette
 		self.lo = lo
 		self.hi = hi
+		self.show_bar=show_bar
 		if layout_func is None:
 			self.layout_func = lambda G: nx.spring_layout(G, scale=0.9, center=(0,0), iterations=n_spring_iters, seed=1)
 		else:
@@ -185,8 +201,9 @@ class VertexObservable(Observable):
 		self.plot.renderers[0].node_renderer.data_source.data['node'] = list(self.G.nodes())
 		self.plot.renderers[0].node_renderer.data_source.data['node_data'] = self.y 
 		self.plot.renderers[0].node_renderer.glyph = Oval(height=0.08, width=0.08, fill_color=linear_cmap('node_data', self.palette, self.lo, self.hi))
-		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
-		self.plot.add_layout(cbar, 'right')
+		if self.show_bar:
+			cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
+			self.plot.add_layout(cbar, 'right')
 		self.plot.add_tools(HoverTool(tooltips=[(self.desc, '@node_data'), ('node', '@node')]))
 		return self.plot
 
@@ -215,8 +232,9 @@ class EdgeObservable(Observable):
 		self.plot.renderers[0].edge_renderer.data_source.data['x_end'] = layout_coords['x_end']
 		self.plot.renderers[0].edge_renderer.data_source.data['y_end'] = layout_coords['y_end']
 		self.plot.renderers[0].edge_renderer.glyph = MultiLine(line_color=linear_cmap('edge_data', self.palette, self.lo, self.hi), line_width=5)
-		cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
-		self.plot.add_layout(cbar, 'right')
+		if self.show_bar:
+			cbar = ColorBar(color_mapper=LinearColorMapper(palette=self.palette, low=self.lo, high=self.hi), ticker=BasicTicker(), title=self.desc)
+			self.plot.add_layout(cbar, 'right')
 		arrows = Arrow(
 			end=VeeHead(size=8), 
 			x_start='x_start', y_start='y_start', x_end='x_end', y_end='y_end', line_width=0, 
@@ -301,3 +319,19 @@ class System:
 	@property
 	def t(self) -> float:
 		return self.observables[0].t
+
+SerializedSystem = Callable[[], System]
+
+''' View graph decompositions of Observables ''' 
+
+def cycle_basis_view(obs: VertexObservable) -> List[System]: 
+	ret = []
+	basis = nx.cycle_basis(obs.G)
+	for i, cycle in enumerate(basis):
+		G_cyc = nx.Graph()
+		nx.add_cycle(G_cyc, cycle)
+		obs_cyc = VertexObservable(G_cyc, desc=f'Cycle {i}')
+		obs_cyc.track(obs) # Mirror values from other graph
+		obs_cyc.set_render_params(palette=obs.palette, lo=obs.lo, hi=obs.hi, show_bar=False)
+		ret.append(System([obs_cyc], desc=f'Cycle {i}'))
+	return ret

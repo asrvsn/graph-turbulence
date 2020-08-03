@@ -92,6 +92,13 @@ def react(msg):
 	# print(msg)
 	if msg['tag'] == 'init':
 		sys_funcs = pickle.loads(msg['systems'].encode('latin1'))
+		for i in range(len(sys_funcs)):
+			if type(sys_funcs[i]) == list:
+				for j in range(len(sys_funcs(i))):
+					sys_funcs[i][j] = sys_funcs[i][j]()
+			else:
+				sys_funcs[i] = sys_funcs[i]()
+
 		col_children = []
 		for i in range(len(sys_funcs)):
 			row_children = []
@@ -100,15 +107,13 @@ def react(msg):
 				if type(elem) == list:
 					subcol = []
 					for k in range(len(elem)):
-						sys = elem[k]()
-						systems.append(sys)
-						plot = sys.create_plot()
+						systems.append(elem[k])
+						plot = elem[k].create_plot()
 						subcol.append(plot)
-					row_children.append(column(subcol, sizing_mode='scale_both'))
+					row_children.append(gridplot(subcol, ncols=int(np.sqrt(len(subcol))), sizing_mode='scale_both'))
 				else:
-					sys = elem()
-					systems.append(sys)
-					row_children.append(sys.create_plot())
+					systems.append(elem)
+					row_children.append(elem.create_plot())
 			col_children.append(row(row_children, sizing_mode='scale_both'))
 		root.children.append(column(col_children, sizing_mode='scale_both'))
 

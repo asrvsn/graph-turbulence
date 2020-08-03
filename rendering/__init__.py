@@ -8,10 +8,10 @@ import webbrowser
 
 from utils.bokeh import serve, bokeh_host, bokeh_port
 from utils.zmq import ipc_tx
-from core.observables import System
+from core.observables import System, SerializedSystem
 
 
-def render_live(rs: List[List[Callable]]):
+def render_live(rs: List[List[SerializedSystem]]):
 	'''Plot live simulation with Bokeh.
 	Args:
 		rs: list of (top-level) functions that produce `System`s when called.
