@@ -52,4 +52,4 @@ def sys1_finite():
 	return sys
 
 if __name__ == '__main__':
-	render_live([sys1(), sys1_finite()])
+	render_live([sys1, sys1_finite])

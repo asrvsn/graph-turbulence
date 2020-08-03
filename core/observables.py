@@ -37,13 +37,14 @@ class Observable(ABC):
 		self.init_domain()
 		self.n = len(self.domain)
 		self.ode = None
-		self.y = np.zeros(len(self.domain))
+		self.y = np.zeros(len(self))
 		self.y0 = lambda _: 0.
 		self.t = 0.
 		self.t0 = 0.
 		self.init_kwargs = {}
 		self.dirichlet_values = dict()
 		self.neumann_values = dict()
+		self.neumann_vec = np.zeros(len(self))
 		self.plot = None
 		self.desc = desc
 		self.set_render_params()
@@ -62,7 +63,7 @@ class Observable(ABC):
 
 	''' ODE ''' 
 
-	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dopri5', **solver_args):
+	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dop853', **solver_args):
 
 		n = len(self)
 
@@ -73,6 +74,7 @@ class Observable(ABC):
 			dydt[n*(order-1):] = replace(f(t), fixed_vals, [0.]*len(fixed_vals))
 			return dydt
 
+		solver_args['max_step'] = 1e-3
 		self.ode = scipy.integrate.ode(g).set_integrator(solver, **solver_args).set_f_params([])
 		self.order = order
 
@@ -101,6 +103,7 @@ class Observable(ABC):
 		assert len(intersect) == 0, f'Dirichlet and Neumann conditions overlap on {intersect}'
 		self.dirichlet_values = dirichlet_values
 		self.neumann_values = neumann_values
+		self.neumann_vec = replace(np.zeros(len(self)), [self.domain[k] for k in neumann_values], list(neumann_values.values()))
 		fixed_idx = [self.domain[k] for k in dirichlet_values.keys()]
 		fixed_vals = list(dirichlet_values.values())
 		self.y = replace(self.y, fixed_idx, fixed_vals)
@@ -173,6 +176,7 @@ class VertexObservable(Observable):
 
 	def init_domain(self):
 		self.domain = dict(zip(self.G.nodes(), count()))
+		self.laplacian = -nx.laplacian_matrix(self.G)
 
 	def create_plot(self):
 		super().create_plot()
@@ -229,7 +233,8 @@ def laplacian_at(obs: VertexObservable, x: Vertex) -> float:
 	return ret
 
 def laplacian(obs: VertexObservable) -> np.ndarray:
-	return np.array([laplacian_at(obs, x) for x in obs.G.nodes()])
+	# return np.array([laplacian_at(obs, x) for x in obs.G.nodes()])
+	return obs.laplacian@obs.y + np.sqrt(obs.default_weight)*obs.neumann_vec
 
 def bilaplacian_at(obs: VertexObservable, x: Vertex) -> float:
 	ret = sum([obs.weight((x, n)) * (laplacian_at(obs, n) - laplacian_at(obs, x)) for n in obs.G.neighbors(x)])
@@ -238,7 +243,8 @@ def bilaplacian_at(obs: VertexObservable, x: Vertex) -> float:
 	return ret
 
 def bilaplacian(obs: VertexObservable) -> np.ndarray:
-	return np.array([bilaplacian_at(obs, x) for x in obs.G.nodes()])
+	# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
+	return obs.laplacian@(obs.laplacian@obs.y + np.sqrt(obs.default_weight)*obs.neumann_vec) 
 
 ''' Multiple observables running concurrently on a graph ''' 
 
