@@ -22,7 +22,6 @@ doc = curdoc()
 Variables
 '''
 
-plots = {}
 systems = []
 render_callback = None
 speed = 0.1 
@@ -92,12 +91,26 @@ def react(msg):
 	global systems, viz_dt
 	# print(msg)
 	if msg['tag'] == 'init':
-		system_funcs = [pickle.loads(r.encode('latin1')) for r in msg['systems']]
-		systems = [f() for f in system_funcs]
-		for r in systems:
-			plots[r.desc] = r.create_plot()
-		grid = gridplot(children=list(plots.values()), ncols=2, sizing_mode='scale_both', toolbar_location=None)
-		root.children.append(grid)
+		sys_funcs = pickle.loads(msg['systems'].encode('latin1'))
+		col_children = []
+		for i in range(len(sys_funcs)):
+			row_children = []
+			for j in range(len(sys_funcs[i])):
+				elem = sys_funcs[i][j]
+				if type(elem) == list:
+					subcol = []
+					for k in range(len(elem)):
+						sys = elem[k]()
+						systems.append(sys)
+						plot = sys.create_plot()
+						subcol.append(plot)
+					row_children.append(column(subcol, sizing_mode='scale_both'))
+				else:
+					sys = elem()
+					systems.append(sys)
+					row_children.append(sys.create_plot())
+			col_children.append(row(row_children, sizing_mode='scale_both'))
+		root.children.append(column(col_children, sizing_mode='scale_both'))
 
 def stream_data():
 	ctx, rx = ipc_rx()

@@ -115,4 +115,4 @@ def sys4():
 	return sys
 
 if __name__ == '__main__':
-	render_live([sys2])
+	render_live([[sys2, sys2_finite]])

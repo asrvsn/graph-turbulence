@@ -34,11 +34,11 @@ def spots():
 def spirals():
 	return swift_hohenberg('Spirals', 0.3, -1, 1, -2, 1)
 
-def spirals_irregular():
+def spots_irregular():
 	set_seed(9001) # For reproducibility
 	a, b, c, gam0, gam2 = 1-1e-2, -1, 1, -2, 1
 	assert c > 0, 'Unstable'
-	G = nx.random_geometric_graph(300, 0.07) # 2nd param is connectivity constraint. Increasing will require decreasing step size to integrate stablyy
+	G = nx.random_geometric_graph(300, 0.25) # 2nd param is connectivity constraint. Increasing will require decreasing step size to integrate stablyy
 	ampl = VertexObservable(G, desc='Amplitude')
 	ampl.set_ode(lambda t: -a*ampl.y - b*(ampl.y**2) -c*(ampl.y**3) + gam0*laplacian(ampl) - gam2*bilaplacian(ampl))
 	ampl.set_initial(
@@ -54,4 +54,4 @@ def spirals_irregular():
 	return sys
 
 if __name__ == '__main__':
-	render_live([spirals_irregular])
+	render_live([spots_irregular])

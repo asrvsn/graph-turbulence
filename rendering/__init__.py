@@ -11,7 +11,7 @@ from utils.zmq import ipc_tx
 from core.observables import System
 
 
-def render_live(rs: List[Callable]):
+def render_live(rs: List[List[Callable]]):
 	'''Plot live simulation with Bokeh.
 	Args:
 		rs: list of (top-level) functions that produce `System`s when called.
@@ -23,7 +23,7 @@ def render_live(rs: List[Callable]):
 	try:
 		print('Waiting for server to initialize...')
 		# webbrowser.open_new_tab('http://{}:{}'.format(bokeh_host, bokeh_port))
-		tx({'tag': 'init', 'systems': [pickle.dumps(r).decode('latin1') for r in rs]})
+		tx({'tag': 'init', 'systems': pickle.dumps(rs).decode('latin1')})
 		print('Done.')
 		while True: 
 			time.sleep(1) # Let bokeh continue to handle interactivity while we wait

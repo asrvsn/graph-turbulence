@@ -48,13 +48,10 @@ def sys2():
 	pressure.set_render_params(lo=-1.0, hi=1.0)
 
 	velocity.set_initial(y0=lambda _: 1.0)
-	# velocity.set_boundary(dirichlet_values={((3,3), (3,4)): 1.0})
 	velocity.set_render_params(palette=cc.kgy, layout_func=layout)
 
 	sys = System([velocity, pressure], desc=f'A test fluid flow')
 	return sys
 
 if __name__ == '__main__':
-	# s = sys1()
-	# s.create_plot()
-	render_live([sys2])
+	render_live([sys1])
