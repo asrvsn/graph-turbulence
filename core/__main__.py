@@ -3,7 +3,6 @@
 import networkx as nx
 import numpy as np
 from itertools import repeat
-import dill as pickle
 
 from core.gde import *
 from rendering import *

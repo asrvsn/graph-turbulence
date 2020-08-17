@@ -4,7 +4,6 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 import scipy.integrate
-import dill as pickle # For pickling lambdas
 from typing import Callable, List, Tuple, Union, Any, Dict
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import ujson
@@ -38,13 +37,14 @@ class Observable(ABC):
 		self.G = G
 		self.init_domain()
 		self.n = len(self.domain)
-		self.ode = None
+		self.integrator = None
 		self.track_other = None
 		self.y = np.zeros(len(self))
 		self.y0 = lambda _: 0.
 		self.t = 0.
 		self.t0 = 0.
 		self.init_kwargs = {}
+		self.fixed_idx = []
 		self.dirichlet_values = dict()
 		self.neumann_values = dict()
 		self.neumann_vec = np.zeros(len(self))
@@ -64,49 +64,48 @@ class Observable(ABC):
 		else:
 			return self.G[e[0]][e[1]][self.w_key]
 
+	def populate(self, f: Callable[[GeoObject], float]) -> np.ndarray:
+		return np.array([f(x) for x in self.domain.keys()])
+
 	''' ODE & updating ''' 
 
-	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, solver: str='dop853', **solver_args):
-
+	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1):
+		self.f = f
+		self.order = order
 		n = len(self)
 
-		def g(t: float, y: np.ndarray, fixed_vals: list):
+		def g(t: float, y: np.ndarray):
 			dydt = np.zeros_like(y)
 			for i in range(order-1):
 				dydt[n*i:n*(i+1)] = y[n*(i+1):n*(i+2)]
-			dydt[n*(order-1):] = replace(f(t), fixed_vals, [0.]*len(fixed_vals))
+			dydt[n*(order-1):] = replace(f(t), self.fixed_idx, np.zeros_like(self.fixed_idx))
 			return dydt
+		self.g = g
 
-		solver_args['max_step'] = 1e-3
-		self.ode = scipy.integrate.ode(g).set_integrator(solver, **solver_args).set_f_params([])
-		self.order = order
+		y0 = np.concatenate((self.y, np.zeros((self.order-1)*n)))
+		for i, y0_i in enumerate(self.init_kwargs.values()):
+				y0[(i+1)*n:(i+2)*n] = self.populate(y0_i)
+		self.integrator = scipy.integrate.RK45(self.g, self.t, y0, np.inf, max_step=1e-2)
 
 	def track(self, other: 'Observable'):
 		''' Track the values of another observable, assuming self.G is a subgraph ''' 
 		assert type(self).__name__ == type(other).__name__, 'Cannot track observable of another type'
-		assert self.ode is None, 'Cannot track values and compute ODE together'
+		assert self.integrator is None, 'Cannot track values and compute ODE together'
 		assert all(k in other.domain for k in self.domain)
 		self.track_other = other
 
 	''' Initial & Boundary Conditions ''' 
 
 	def set_initial(self, t0: float=0., y0: Callable[[GeoObject], float]=lambda _: 0., **kwargs):
-
-		def fill_arr(f: Callable[[GeoObject], float]) -> np.ndarray:
-			return np.array([f(x) for x in self.domain.keys()])
-
 		self.t0 = t0
 		self.t = t0
 		self.y0 = y0
-		self.y = fill_arr(y0)
+		self.y = self.populate(y0)
 		self.init_kwargs = kwargs
-		if self.ode is not None:
-			n = len(self)
-			y0 = np.concatenate((self.y, np.zeros((self.order-1)*n)))
+		# Setting initial values resets the integrator
+		if self.integrator is not None: 
 			assert len(kwargs) == self.order - 1, f'{len(kwargs)+1} initial conditions provided but {self.order} needed'
-			for i, y0_i in enumerate(kwargs.values()):
-				y0[(i+1)*n:(i+2)*n] = fill_arr(y0_i)
-			self.ode.set_initial_value(y0, t=self.t)
+			self.set_ode(self.f, self.order)
 
 	def set_boundary(self, dirichlet_values: Dict[GeoObject, float]={}, neumann_values: Dict[GeoObject, float]={}):
 		intersect = dirichlet_values.keys() & neumann_values.keys()
@@ -114,12 +113,12 @@ class Observable(ABC):
 		self.dirichlet_values = dirichlet_values
 		self.neumann_values = neumann_values
 		self.neumann_vec = replace(np.zeros(len(self)), [self.domain[k] for k in neumann_values], list(neumann_values.values()))
-		fixed_idx = [self.domain[k] for k in dirichlet_values.keys()]
+		self.fixed_idx = [self.domain[k] for k in dirichlet_values.keys()]
 		fixed_vals = list(dirichlet_values.values())
-		self.y = replace(self.y, fixed_idx, fixed_vals)
-		if self.ode is not None:
-			self.ode.set_initial_value(replace(self.ode.y, fixed_idx, fixed_vals), t=self.t)
-			self.ode.set_f_params(fixed_idx)
+		self.y = replace(self.y, self.fixed_idx, fixed_vals)
+		# Setting boundary values resets the integrator
+		if self.integrator is not None:
+			self.set_ode(self.f, self.order)
 
 	@property
 	def boundary(self) -> List[GeoObject]:
@@ -128,16 +127,34 @@ class Observable(ABC):
 	''' Integration ''' 
 
 	def step(self, dt: float):
-		if self.ode is not None:
-			self.ode.integrate(self.t + dt)
+		if self.integrator is not None:
+			# print('started step')
+			self.integrator.t_bound = self.t + dt
+			self.integrator.status = 'running'
+			while self.integrator.status != 'finished':
+				self.integrator.step()
+				# print('integrator step:', self.integrator.h_abs)
+			# print('finished step')
+			# print('final integrator step:', self.integrator.h_abs)
+
+	def integrate(self, t0: float, tf: float):
+		n = len(self)
+		y0 = np.concatenate((self.y, np.zeros((self.order-1)*n)))
+		for i, y0_i in enumerate(self.init_kwargs.values()):
+				y0[(i+1)*n:(i+2)*n] = self.populate(y0_i)
+		sol = scipy.integrate.solve_ivp(self.g, (t0, tf), y0)
+		self.t = tf
+		self.y = sol.y[:len(self)]
+		return self.y
 
 	def measure(self) -> np.ndarray:
-		if self.ode is not None:
-			self.t = self.ode.t
-			self.y = self.ode.y[:len(self)]
+		if self.integrator is not None:
+			self.t = self.integrator.t
+			print(self.integrator.t)
+			self.y = self.integrator.y[:len(self)]
 		elif self.track_other is not None:
 			self.t = self.track_other.t
-			self.y = self.track_other.y[list(self.domain.values())]
+			self.y = np.array([self.track_other(x) for x in self.domain])
 
 		if self.plot is not None:
 			self.render()
@@ -146,8 +163,10 @@ class Observable(ABC):
 	def reset(self):
 		if self.track_other is None:
 			self.set_initial(t0=self.t0, y0=self.y0, **self.init_kwargs)
+			self.set_boundary(self.dirichlet_values, self.neumann_values)
 		else:
 			self.set_initial(t0=self.track_other.t0, y0=self.track_other.y0)
+			self.set_boundary(self.track_other.dirichlet_values, self.track_other.neumann_values)
 
 	''' Builtins ''' 
 

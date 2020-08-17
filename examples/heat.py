@@ -129,4 +129,4 @@ def sys4():
 	return sys
 
 if __name__ == '__main__':
-	render_live([sys1_decomp])
+	render_live([[sys1]])

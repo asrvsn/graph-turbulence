@@ -3,11 +3,10 @@
 from typing import Callable, List
 from pathlib import Path
 import time
-import pickle 
 import webbrowser
 
 from utils.bokeh import serve, bokeh_host, bokeh_port
-from utils.zmq import ipc_tx
+from utils.zmq import *
 from core.observables import System, SerializedSystem
 
 
@@ -23,7 +22,7 @@ def render_live(rs: List[List[SerializedSystem]]):
 	try:
 		print('Waiting for server to initialize...')
 		# webbrowser.open_new_tab('http://{}:{}'.format(bokeh_host, bokeh_port))
-		tx({'tag': 'init', 'systems': pickle.dumps(rs).decode('latin1')})
+		tx({'tag': 'init', 'systems': wire_pickle(rs)})
 		print('Done.')
 		while True: 
 			time.sleep(1) # Let bokeh continue to handle interactivity while we wait

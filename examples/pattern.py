@@ -54,4 +54,4 @@ def spots_irregular():
 	return sys
 
 if __name__ == '__main__':
-	render_live([spots_irregular])
+	render_live([[spots_irregular]])

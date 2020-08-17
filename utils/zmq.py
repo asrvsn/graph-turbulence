@@ -2,6 +2,7 @@
 
 import ujson
 import zmq
+import cloudpickle as pickle
 
 zmq_pubsub_port = 8079
 zmq_pubsub_topic = '0'
@@ -40,3 +41,9 @@ def pubsub_rx():
 	sock.setsockopt_string(zmq.SUBSCRIBE, zmq_pubsub_topic)
 	rx = lambda: pubsub_to_dict(sock.recv_string())
 	return ctx, rx
+
+def wire_pickle(x):
+	return pickle.dumps(x).decode('latin1')
+
+def wire_unpickle(x):
+	return pickle.loads(x.encode('latin1'))

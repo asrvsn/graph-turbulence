@@ -4,14 +4,13 @@ import numpy as np
 from functools import partial
 from threading import Thread
 from tornado import gen
-import pickle 
 
 from bokeh.plotting import figure, output_file, show, curdoc, from_networkx
 from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
 from bokeh.layouts import row, column, gridplot, widgetbox
-from bokeh.models.widgets import Div
+from bokeh.models.widgets import Div, TextInput
 
-from utils.zmq import ipc_rx
+from utils.zmq import *
 from rendering import *
 
 # Save curdoc() to make sure all threads see the same document.
@@ -91,10 +90,10 @@ def react(msg):
 	global systems, viz_dt
 	# print(msg)
 	if msg['tag'] == 'init':
-		sys_funcs = pickle.loads(msg['systems'].encode('latin1'))
+		sys_funcs = wire_unpickle(msg['systems'])
 		for i in range(len(sys_funcs)):
 			if type(sys_funcs[i]) == list:
-				for j in range(len(sys_funcs(i))):
+				for j in range(len(sys_funcs[i])):
 					sys_funcs[i][j] = sys_funcs[i][j]()
 			else:
 				sys_funcs[i] = sys_funcs[i]()

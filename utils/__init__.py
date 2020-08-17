@@ -3,6 +3,7 @@ import random
 import torch
 from collections.abc import Iterable
 from itertools import repeat
+from typing import Callable
 
 def set_seed(seed=None):
 	random.seed(seed)
