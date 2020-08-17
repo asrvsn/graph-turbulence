@@ -13,6 +13,7 @@ import colorcet as cc
 from itertools import count
 from enum import Enum
 from abc import ABC, abstractmethod
+import math
 
 from bokeh.plotting import figure, from_networkx
 from bokeh.models import ColorBar, LinearColorMapper, BasicTicker, HoverTool, Arrow, VeeHead
@@ -53,6 +54,7 @@ class Observable(ABC):
 		self.set_render_params()
 		self.w_key = weight_key
 		self.default_weight = default_weight
+		self.nonphysical = lambda y: False
 
 	@abstractmethod
 	def init_domain(self):
@@ -69,7 +71,7 @@ class Observable(ABC):
 
 	''' ODE & updating ''' 
 
-	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1):
+	def set_ode(self, f: Callable[[float], np.ndarray], order: int=1, max_step=np.inf):
 		self.f = f
 		self.order = order
 		n = len(self)
@@ -85,7 +87,7 @@ class Observable(ABC):
 		y0 = np.concatenate((self.y, np.zeros((self.order-1)*n)))
 		for i, y0_i in enumerate(self.init_kwargs.values()):
 				y0[(i+1)*n:(i+2)*n] = self.populate(y0_i)
-		self.integrator = scipy.integrate.RK45(self.g, self.t, y0, np.inf, max_step=1e-2)
+		self.integrator = scipy.integrate.RK45(self.g, self.t, y0, np.inf, max_step=max_step)
 
 	def track(self, other: 'Observable'):
 		''' Track the values of another observable, assuming self.G is a subgraph ''' 
@@ -128,14 +130,30 @@ class Observable(ABC):
 
 	def step(self, dt: float):
 		if self.integrator is not None:
-			# print('started step')
 			self.integrator.t_bound = self.t + dt
 			self.integrator.status = 'running'
 			while self.integrator.status != 'finished':
 				self.integrator.step()
-				# print('integrator step:', self.integrator.h_abs)
-			# print('finished step')
-			# print('final integrator step:', self.integrator.h_abs)
+				self._measure_integrator()
+
+	def measure(self) -> np.ndarray:
+		if self.integrator is not None:
+			self._measure_integrator()
+			print(self.t)
+		elif self.track_other is not None:
+			self.t = self.track_other.t
+			self.y = np.array([self.track_other(x) for x in self.domain])
+		if self.plot is not None:
+			self.render()
+		if self.nonphysical(self.y):
+			raise Exception('Non-physical solution')
+		return self.y
+
+	def _measure_integrator(self):
+		# TODO: coupled `observables` referencing these states are currently receiving out-of-date values.
+		# Should likely couple them into a single integrator. Create a `couple()` method.
+		self.t = self.integrator.t
+		self.y = self.integrator.y[:len(self)]
 
 	def integrate(self, t0: float, tf: float):
 		n = len(self)
@@ -147,19 +165,6 @@ class Observable(ABC):
 		self.y = sol.y[:len(self)]
 		return self.y
 
-	def measure(self) -> np.ndarray:
-		if self.integrator is not None:
-			self.t = self.integrator.t
-			print(self.integrator.t)
-			self.y = self.integrator.y[:len(self)]
-		elif self.track_other is not None:
-			self.t = self.track_other.t
-			self.y = np.array([self.track_other(x) for x in self.domain])
-
-		if self.plot is not None:
-			self.render()
-		return self.y
-
 	def reset(self):
 		if self.track_other is None:
 			self.set_initial(t0=self.t0, y0=self.y0, **self.init_kwargs)
@@ -167,6 +172,9 @@ class Observable(ABC):
 		else:
 			self.set_initial(t0=self.track_other.t0, y0=self.track_other.y0)
 			self.set_boundary(self.track_other.dirichlet_values, self.track_other.neumann_values)
+
+	def set_nonphysical(self, f: Callable[[np.ndarray], bool]):
+		self.nonphysical = f
 
 	''' Builtins ''' 
 

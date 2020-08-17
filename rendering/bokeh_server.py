@@ -4,6 +4,7 @@ import numpy as np
 from functools import partial
 from threading import Thread
 from tornado import gen
+import traceback
 
 from bokeh.plotting import figure, output_file, show, curdoc, from_networkx
 from bokeh.models import ColumnDataSource, Slider, Select, Button, Oval
@@ -40,11 +41,19 @@ speed_slider = Slider(start=-2.0, end=1.0, value=-1.0, step=0.02, title='Speed',
 Callbacks
 '''
 def update():
-	global systems, viz_dt
-	for r in systems:
-		r.step(viz_dt * 1e-3 * speed)
-		r.measure()
-	t2.text = str(round(systems[0].t, 3))
+	global systems, viz_dt, render_callback
+	try:
+		for r in systems:
+			r.step(viz_dt * 1e-3 * speed)
+			r.measure()
+		t2.text = str(round(systems[0].t, 3))
+	except KeyboardInterrupt:
+		raise
+	except:
+		print('Exception caught, stopping')
+		pp_button.label = '► Play'
+		doc.remove_periodic_callback(render_callback)
+		traceback.print_exc()
 
 def reset_button_cb():
 	global systems
@@ -61,7 +70,8 @@ def pp_button_cb():
 		render_callback = doc.add_periodic_callback(update, viz_dt)
 	else:
 		pp_button.label = '► Play'
-		doc.remove_periodic_callback(render_callback)
+		if render_callback in doc.session_callbacks:
+			doc.remove_periodic_callback(render_callback)
 pp_button.on_click(pp_button_cb)
 
 def speed_slider_cb(attr, old, new):

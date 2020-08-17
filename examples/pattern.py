@@ -16,11 +16,15 @@ G = nx.grid_2d_graph(n, n)
 def swift_hohenberg(desc: str, a: float, b: float, c: float, gam0: float, gam2: float):
 	assert c > 0, 'Unstable'
 	ampl = VertexObservable(G, desc='Amplitude')
-	ampl.set_ode(lambda t: -a*ampl.y - b*(ampl.y**2) -c*(ampl.y**3) + gam0*laplacian(ampl) - gam2*bilaplacian(ampl))
+	ampl.set_ode(
+		lambda t: -a*ampl.y - b*(ampl.y**2) -c*(ampl.y**3) + gam0*laplacian(ampl) - gam2*bilaplacian(ampl),
+		max_step=1e-2,
+	)
 	ampl.set_initial(
 		y0=lambda pos: np.random.uniform(),
 	)
 	ampl.set_render_params(palette=cc.bgy, lo=-1.2, hi=1.2, n_spring_iters=1500)
+	ampl.set_nonphysical(lambda y: (np.abs(y) > 2.0).any())
 
 	sys = System([ampl], desc=desc)
 	return sys
@@ -54,4 +58,4 @@ def spots_irregular():
 	return sys
 
 if __name__ == '__main__':
-	render_live([[spots_irregular]])
+	render_live([[stripes]])

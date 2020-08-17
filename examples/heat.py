@@ -25,6 +25,7 @@ def sys1():
 	temp.set_boundary(
 		dirichlet_values=dict(zip(upper + lower + left + right, [0.]*n + [0.5]*n + [1.]*n + [0.]*n))
 	)
+	temp.set_nonphysical(lambda y: (np.abs(y) > 1.0).any())
 
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
 	return sys
