@@ -6,8 +6,8 @@ from itertools import repeat
 import pdb
 import colorcet as cc
 
-from core.observables import *
-from core.fd import fd_diffusion
+from core import *
+from core.finite import fd_diffusion
 from rendering import *
 
 n = 10

@@ -7,7 +7,7 @@ import webbrowser
 
 from utils.bokeh import serve, bokeh_host, bokeh_port
 from utils.zmq import *
-from core.observables import System, SerializedSystem
+from core.observable import System, SerializedSystem
 
 
 def render_live(rs: List[List[SerializedSystem]]):

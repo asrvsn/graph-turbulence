@@ -6,7 +6,7 @@ from itertools import repeat
 import pdb
 import colorcet as cc
 
-from core.observables import *
+from core import *
 from rendering import *
 from utils import set_seed
 

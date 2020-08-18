@@ -6,7 +6,7 @@ from itertools import repeat
 import pdb
 import colorcet as cc
 
-from core.observables import *
+from core import *
 from rendering import *
 
 n = 10
@@ -16,7 +16,7 @@ def sys1():
 	pressure = VertexObservable(G, desc='Pressure')
 	velocity = EdgeObservable(G, desc='Velocity')
 
-	velocity.set_ode(lambda t: -velocity.y@grad(velocity) - grad(pressure))
+	velocity.set_ode(lambda t: -advect(velocity, velocity) - grad(pressure))
 
 	pressure.set_initial(y0=lambda _: 0)
 	pressure.set_boundary(dirichlet_values={(3,3): 1.0, (7,7): -1.0})
@@ -41,7 +41,7 @@ def sys2():
 	pressure = VertexObservable(G, desc='Pressure')
 	velocity = EdgeObservable(G, desc='Velocity')
 
-	velocity.set_ode(lambda t: -velocity.y@grad(velocity) - grad(pressure))
+	velocity.set_ode(lambda t: -advect(velocity, velocity) - grad(pressure))
 
 	pressure.set_initial(y0=lambda _: 0)
 	pressure.set_boundary(dirichlet_values={np.random.randint(n): 1.0, np.random.randint(n): -1.0})
