@@ -60,11 +60,9 @@ class Observable(ABC):
 	def init_domain(self):
 		pass
 
-	def weight(self, e: Edge) -> float:
-		if self.w_key is None:
-			return self.default_weight
-		else:
-			return self.G[e[0]][e[1]][self.w_key]
+	@abstractmethod
+	def weight(self, x1: GeoObject, x2: GeoObject) -> float:
+		pass
 
 	def populate(self, f: Callable[[GeoObject], float]) -> np.ndarray:
 		return np.array([f(x) for x in self.domain.keys()])
@@ -223,6 +221,12 @@ class VertexObservable(Observable):
 		self.domain = dict(zip(self.G.nodes(), count()))
 		self.laplacian = -nx.laplacian_matrix(self.G)
 
+	def weight(self, x: Vertex, y: Vertex):
+		if self.w_key is None:
+			return self.default_weight
+		else:
+			return self.G[x][y][self.w_key]
+
 	def create_plot(self):
 		super().create_plot()
 		self.plot.renderers[0].node_renderer.data_source.data['node'] = list(self.G.nodes())
@@ -240,9 +244,22 @@ class VertexObservable(Observable):
 
 class EdgeObservable(Observable):
 
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		# Weighted dual graph definition taken from Eq. 6, https://arxiv.org/pdf/0912.4389.pdf
+		self.vertex_dual = nx.line_graph(self.G)
+		off_diag = 1 - np.eye(len(self))
+		inc = nx.incidence_matrix(self.G, oriented=True) # TODO: extract weights
+		inv_deg = np.diag([(0. if self.G.degree[x] <= 1 else (1 / self.G.degree[x])) for x in self.G.nodes()])
+		self.vertex_dual_adj = inc.T @ inv_deg @ inc @ off_diag
+
 	def init_domain(self):
 		self.domain = dict(zip(self.G.edges(), count()))
 		self.orientation = np.ones(len(self.G.edges())) # Arbitrarily assign a +1 orientation to the edge ordering stored by networkx
+
+	def weight(self, x: Edge, y: Edge):
+		adj, x_i, y_i = self.vertex_dual_adj, self.domain[x], self.domain[y]
+		return adj[x_i, y_i]
 
 	def create_plot(self):
 		super().create_plot()
@@ -274,6 +291,12 @@ class EdgeObservable(Observable):
 	def render(self):
 		self.plot.renderers[0].edge_renderer.data_source.data['edge_data'] = self.y
 		# TODO: render edge direction using: https://discourse.bokeh.org/t/hover-over-tooltips-on-network-edges/2439/7
+
+	def __call__(self, e: Edge):
+		if e in self.orientation:
+			return super().__call__(e)
+		else:
+			return -super().__call__(e)
 
 
 ''' Differential operators on observables ''' 
@@ -310,6 +333,22 @@ def bilaplacian_at(obs: VertexObservable, x: Vertex) -> float:
 def bilaplacian(obs: VertexObservable) -> np.ndarray:
 	# TODO correct way to handle Neumann in this case? (Gradient constraint only specifies one neighbor beyond)
 	return obs.laplacian@(obs.laplacian@obs.y + np.sqrt(obs.default_weight)*obs.neumann_vec) 
+
+def advect_vertex(x: Vertex, obs: VertexObservable, v_field: EdgeObservable) -> float:
+	''' Advection of a scalar field ''' 
+	return sum([v_field((x, y)) * partial(obs, (x, y)) for y in obs.G.neighbors(x)])
+
+def advect_edge(e: Edge, obs: EdgeObservable, v_field: EdgeObservable) -> float:
+	''' Advection of a vector field ''' 
+	return sum([v_field(e) * obs(e_n) / obs.weight(e, e_n) for e_n in obs.vertex_dual.neighbors(e)])	
+
+def advect(obs: Observable, v_field: EdgeObservable) -> np.ndarray:
+	if type(obs) == VertexObservable:
+		return np.array([advect_vertex(x, obs, v_field) for x in obs.domain])
+	elif type(obs) == EdgeObservable:
+		return np.array([advect_edge(e, obs, v_field) for v in obs.domain])
+	else:
+		raise NotImplementedError
 
 ''' Multiple observables running concurrently on a graph ''' 
 
