@@ -42,7 +42,7 @@ def sys1_decomp():
 	)
 
 	sys = System([temp], desc=f'Heat equation (alpha={alpha}) with non-uniform Dirichlet boundary conditions')
-	return [sys, cycle_basis_view(temp)]
+	return [sys, project_cycle_basis(temp)]
 
 def sys1_finite():
 	''' Finite-difference version of sys1 ''' 

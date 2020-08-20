@@ -52,3 +52,22 @@ def advect(obs: Observable, v_field: EdgeObservable) -> np.ndarray:
 		return np.array([advect_edge(e, obs, v_field) for v in obs.domain])
 	else:
 		raise NotImplementedError
+
+''' Views & transformations of observables ''' 
+
+def project_cycle_basis(obs: VertexObservable) -> List[VertexObservable]: 
+	''' Cycle-basis decomposition '''
+	ret = []
+	basis = nx.cycle_basis(obs.G)
+	for i, cycle in enumerate(basis):
+		G_cyc = nx.Graph()
+		nx.add_cycle(G_cyc, cycle)
+		obs_cyc = VertexObservable(G_cyc, desc=f'Cycle {i}')
+		obs_cyc.track(obs) # Project values from larger system
+		obs_cyc.set_render_params(palette=obs.palette, lo=obs.lo, hi=obs.hi, show_bar=False)
+		ret.append(obs_cyc)
+	return ret
+
+def couple(*obs: Tuple[Observable]):
+	''' Couple multiple PDEs on different domains into a single system. No-op on any observables which do not have an instantiated PDE. ''' 
+	pass

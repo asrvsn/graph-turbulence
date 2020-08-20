@@ -29,6 +29,8 @@ Edge = Tuple[Vertex, Vertex]
 Face = Tuple[Vertex, ...]
 GeoObject = Union[Vertex, Edge]
 
+''' Base observable definitions '''
+
 class Observable(ABC):
 	''' A real-valued function defined on a graph domain
 	Note: abstract base class, not intended to be instantiated.
@@ -336,17 +338,3 @@ class System:
 		return self.observables[0].t
 
 SerializedSystem = Callable[[], System]
-
-''' View graph decompositions of Observables ''' 
-
-def cycle_basis_view(obs: VertexObservable) -> List[System]: 
-	ret = []
-	basis = nx.cycle_basis(obs.G)
-	for i, cycle in enumerate(basis):
-		G_cyc = nx.Graph()
-		nx.add_cycle(G_cyc, cycle)
-		obs_cyc = VertexObservable(G_cyc, desc=f'Cycle {i}')
-		obs_cyc.track(obs) # Mirror values from other graph
-		obs_cyc.set_render_params(palette=obs.palette, lo=obs.lo, hi=obs.hi, show_bar=False)
-		ret.append(System([obs_cyc], desc=f'Cycle {i}'))
-	return ret

@@ -26,6 +26,8 @@ def sys1():
 	# velocity.set_boundary(dirichlet_values={((3,3), (3,4)): 1.0})
 	velocity.set_render_params(palette=cc.kgy)
 
+	couple(pressure, velocity)
+
 	sys = System([velocity, pressure], desc=f'A test fluid flow')
 	return sys
 
@@ -50,6 +52,8 @@ def sys2():
 	velocity.set_initial(y0=lambda _: 1.0)
 	velocity.set_render_params(palette=cc.kgy, layout_func=layout)
 
+	couple(pressure, velocity)
+	
 	sys = System([velocity, pressure], desc=f'A test fluid flow')
 	return sys
 
